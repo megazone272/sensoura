@@ -1,0 +1,25 @@
+{
+  "Sensoura": {
+    "sensorData": {
+      "temperature": 28.5,
+      "soilTemperature": 22.3,
+      "humidity": 65.2,
+      "soilMoisture": 25.0,
+      "gas": 180,
+      "light": 720,
+      "airPressure": 1013.25,
+      "lastUpdate": 1792007145618
+    },
+    "system": {
+      "status": "online",
+      "lastSeen": 1792007145618,
+      "deviceId": "sensoura-esp32-01",
+      "relay": { "mode": "AUTO", "state": "OFF", "reason": null, "lastAction": null },
+      "buzzer": { "muted": false },
+      "leds": { "green": false, "red": false }
+    },
+    "commands": {},
+    "commandResults": {},
+    "aiSuggestions": {}
+  }
+}

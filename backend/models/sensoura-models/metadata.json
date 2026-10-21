@@ -1,0 +1,18 @@
+{
+  "version": "1.0.0",
+  "trainedAt": 1792001480765,
+  "samplesCount": 1000,
+  "accuracy": 0.87,
+  "features": [
+    "temperature",
+    "soilTemperature",
+    "humidity",
+    "soilMoisture",
+    "gas",
+    "light",
+    "airPressure",
+    "hourOfDay",
+    "dayOfYear"
+  ],
+  "backend": "tfjs-node"
+}

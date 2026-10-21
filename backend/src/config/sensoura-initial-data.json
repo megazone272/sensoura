@@ -1,0 +1,105 @@
+{
+  "sensorData": {
+    "temperature": 28.4,
+    "soilTemperature": 22.5,
+    "humidity": 65.0,
+    "soilMoisture": 24.0,
+    "gas": 185,
+    "light": 720,
+    "airPressure": 1013.25,
+    "lastUpdate": 1791864000000
+  },
+  "system": {
+    "status": "online",
+    "lastSeen": 1791864000000,
+    "deviceId": "sensoura-esp32-01",
+    "relay": {
+      "mode": "AUTO",
+      "state": "ON",
+      "reason": "soil_dry",
+      "lastAction": 1791864000000
+    },
+    "buzzer": {
+      "muted": false
+    },
+    "leds": {
+      "green": false,
+      "red": true
+    }
+  },
+  "commands": {
+    "1042": {
+      "target": "pump",
+      "action": "ON",
+      "mode": "MANUAL",
+      "timestamp": 1791864000000
+    },
+    "1043": {
+      "target": "buzzer",
+      "action": "MUTE",
+      "timestamp": 1791864001000
+    },
+    "1044": {
+      "target": "pump",
+      "action": "OFF",
+      "mode": "MANUAL",
+      "timestamp": 1791864002000
+    }
+  },
+  "commandResults": {
+    "1042": {
+      "status": "executed",
+      "target": "pump",
+      "requestedAction": "ON",
+      "actualState": "ON",
+      "message": "Pump turned on successfully",
+      "timestamp": 1791864001000
+    },
+    "1043": {
+      "status": "executed",
+      "target": "buzzer",
+      "requestedAction": "MUTE",
+      "actualState": "MUTED",
+      "message": "Buzzer muted successfully",
+      "timestamp": 1791864002000
+    },
+    "1044": {
+      "status": "executed",
+      "target": "pump",
+      "requestedAction": "OFF",
+      "actualState": "OFF",
+      "message": "Pump turned off successfully",
+      "timestamp": 1791864003000
+    }
+  },
+  "aiSuggestions": {
+    "2001": {
+      "type": "irrigation",
+      "suggestion": "Start irrigation now",
+      "reason": "Soil moisture is below the configured threshold",
+      "recommendedAction": {
+        "target": "pump",
+        "action": "ON",
+        "mode": "MANUAL"
+      },
+      "status": "pending",
+      "requiresApproval": true,
+      "createdAt": 1791864000000,
+      "expiresAt": 1791867600000
+    },
+    "2002": {
+      "type": "environment",
+      "suggestion": "Check the gas sensor readings",
+      "reason": "The gas reading is approaching the configured warning threshold",
+      "recommendedAction": {
+        "target": "gasSensor",
+        "action": "CHECK_SENSOR",
+        "mode": null
+      },
+      "status": "pending",
+      "requiresApproval": true,
+      "createdAt": 1791864010000,
+      "expiresAt": 1791867610000
+    }
+  }
+}
