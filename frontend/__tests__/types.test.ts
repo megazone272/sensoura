@@ -3,7 +3,6 @@ import type {
   SensorData,
   SystemStatus,
   Command,
-  CommandResult,
   AISuggestion,
 } from '@/shared/types';
 

@@ -1,5 +1,23 @@
-import { describe, it, expect } from 'vitest';
-import { endpoints } from '@/services/api';
+import { describe, it, expect, beforeAll } from 'vitest';
+import axios from 'axios';
+import { api, endpoints } from '@/services/api';
+
+// The endpoint helpers fire real requests. Without a stubbed adapter they
+// reach for http://localhost:3000, fail, and surface as unhandled rejections
+// (vitest then exits non-zero even though every assertion passed). The stub
+// keeps the calls in-process; the assertions below are unchanged.
+beforeAll(() => {
+  const adapter = (config: any) =>
+    Promise.resolve({
+      data: {},
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      config,
+    });
+  api.defaults.adapter = adapter as any;
+  axios.defaults.adapter = adapter as any;
+});
 
 describe('API Endpoints', () => {
   it('should have all required endpoints defined', () => {

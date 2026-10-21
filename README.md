@@ -200,9 +200,23 @@ sensoura/
 │   │   ├── routes/            # API routes
 │   │   ├── socket/            # Socket.IO server
 │   │   ├── ai/                # AI/ML engine
-│   │   │   └── engine.ts      # TensorFlow.js models
+│   │   │   ├── engine.ts      # TensorFlow.js models
+│   │   │   ├── pipeline/      # Data-integration / decision / prediction pipelines
+│   │   │   │   ├── calibration/   # Calibration artifacts: load, validate, apply
+│   │   │   │   ├── cycle/         # Decision & prediction cycles
+│   │   │   │   ├── decision/      # Rule-based decision engine
+│   │   │   │   ├── prediction/    # Prediction engine
+│   │   │   │   ├── integrations/  # Open-Meteo / NASA POWER clients
+│   │   │   │   ├── processing/    # Normalization & matching
+│   │   │   │   ├── scheduler/     # Independent schedules + job locks
+│   │   │   │   ├── storage/       # Versioned Firebase records
+│   │   │   │   └── utils/         # Units, timestamps, quality checks
+│   │   │   ├── training/      # Offline calibration training (npm run ai:train)
+│   │   │   └── train.ts       # Training CLI
 │   │   ├── utils/             # Logger & helpers
 │   │   └── index.ts           # Entry point
+│   ├── datasets/calibration/  # Paired reference measurements (operator-supplied)
+│   ├── models/calibration/    # Trained calibration artifacts (generated)
 │   ├── scripts/               # Utility scripts
 │   ├── tests/                 # Tests
 │   ├── Dockerfile
@@ -243,6 +257,7 @@ sensoura/
 │   └── prometheus.yml
 │
 ├── docs/                       # Documentation
+│   └── ai-pipeline.md          # Pipeline, Firebase layout & calibration reference
 ├── architecture/               # Architecture diagrams
 ├── scripts/                    # Utility scripts
 │   └── health-check.sh
@@ -468,6 +483,24 @@ npm run test         # Run tests
 npm run lint         # Lint code
 npm run typecheck    # Type checking
 ```
+
+### AI pipelines (data integration → decision → prediction)
+
+The pipeline runs as its own process, separate from the API server. See
+[docs/ai-pipeline.md](docs/ai-pipeline.md) for the full reference.
+
+```bash
+cd backend
+npm run pipeline        # Scheduler: decision every 30 min, prediction once a day
+npm run pipeline:once   # Run both cycles once and exit
+npm run ai:train        # Fit a calibration model from paired reference data
+npm run inspect:legacy  # Read-only: inspect the existing aiPredictions node
+```
+
+`npm run ai:train` needs paired reference measurements in
+`backend/datasets/calibration/` (format documented in
+[backend/datasets/calibration/README.md](backend/datasets/calibration/README.md)).
+Without them it reports that and exits non-zero — it never invents a model.
 
 ### Frontend
 ```bash
