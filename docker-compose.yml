@@ -78,6 +78,44 @@ services:
       retries: 3
 
   # ==========================================
+  # AI Pipeline (data-integration / decision / prediction)
+  # Separate process from the HTTP backend. Advisory only: it never writes
+  # actuator commands. See docs/ai-pipeline.md.
+  # ==========================================
+  pipeline:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: production
+    container_name: sensoura-pipeline
+    restart: unless-stopped
+    command: ["node", "dist/ai/pipeline/index.js"]
+    ports:
+      - "3100:3100"
+    environment:
+      - NODE_ENV=production
+      - PIPELINE_ENABLED=true
+      - PIPELINE_HOST=0.0.0.0
+      - PIPELINE_PORT=3100
+      - GREENHOUSE_TIMEZONE=Africa/Cairo
+      # Append new predictions to the existing node; existing records are
+      # never modified or deleted.
+      - AI_LEGACY_PREDICTIONS_PATH=/Sensoura/aiPredictions
+      - AI_LEGACY_PREDICTIONS_WRITE=true
+      # The pipeline is advisory only and never actuates the pump.
+      - AI_ALLOW_IRRIGATION_RECOMMENDATIONS=false
+    env_file:
+      - ./backend/.env
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3100/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+
+  # ==========================================
   # Frontend (Vite + React) - Development
   # ==========================================
   frontend-dev:

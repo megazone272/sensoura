@@ -204,7 +204,7 @@ export function initializeSocketIO(httpServer: HttpServer, frontendUrl: string):
       });
     });
 
-    socket.on('unsubscribe', (streams: string[]) => {
+    socket.on('unsubscribe', (_streams: string[]) => {
       // Handled by returning cleanup functions
     });
 

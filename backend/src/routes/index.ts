@@ -1,4 +1,4 @@
-import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { getLogger } from '../utils/logger.js';
 import { realtimeService } from '../services/realtime.js';
@@ -13,10 +13,6 @@ const commandSchema = z.object({
   target: z.enum(['pump', 'buzzer', 'led', 'system']),
   action: z.enum(['ON', 'OFF', 'MUTE', 'UNMUTE', 'REBOOT', 'CALIBRATE']),
   mode: z.enum(['MANUAL', 'AUTO']).default('MANUAL'),
-});
-
-const suggestionActionSchema = z.object({
-  suggestionId: z.string(),
 });
 
 function notFound(message: string): Error & { statusCode: number } {
@@ -177,7 +173,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   });
 
   // Trigger model retraining (admin only)
-  fastify.post('/api/ai/retrain', async (request, reply) => {
+  fastify.post('/api/ai/retrain', async () => {
     // In production, add admin auth check
     logger.info('Manual retrain triggered');
     // Would trigger background job
@@ -186,7 +182,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
 
   // Historical data (would query Firebase/Time-series DB)
   fastify.get('/api/history/sensor-data', async (request) => {
-    const { from, to, limit = '100' } = request.query as { from?: string; to?: string; limit?: string };
+    const { limit = '100' } = request.query as { limit?: string };
     // Mock historical data
     const now = Date.now();
     const count = Math.min(parseInt(limit), 500);

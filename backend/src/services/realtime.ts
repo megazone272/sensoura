@@ -1,4 +1,4 @@
-import { getDatabase, mockDb, isFirebaseEnabled, getRestClient } from './firebase.js';
+import { getDatabase, isFirebaseEnabled, getRestClient } from './firebase.js';
 import { getLogger } from '../utils/logger.js';
 import type { SensorData, SystemStatus, Command, CommandResult, AISuggestion, SensouraState } from '../models/sensoura.js';
 import { aiEngine } from '../ai/engine.js';
