@@ -28,8 +28,8 @@ describe('Backend Integration', () => {
     it('getSensorData returns valid data', () => {
       const data = realtimeService.getSensorData();
       expect(data).not.toBeNull();
-      expect(data.temperature).toBeGreaterThan(-50);
-      expect(data.temperature).toBeLessThan(60);
+      expect(data.AirTemp).toBeGreaterThan(-50);
+      expect(data.AirTemp).toBeLessThan(60);
     });
 
     it('has mock database with sample data', () => {
@@ -105,20 +105,20 @@ describe('Backend Integration', () => {
 
     it('sensor data schema is valid', () => {
       const sensorData = {
-        temperature: 28.4,
-        soilTemperature: 22.5,
-        humidity: 65,
-        soilMoisture: 24,
-        gas: 185,
-        light: 720,
-        airPressure: 1013.25,
+        AirTemp: 28.4,
+        SoilTemp: 22.5,
+        AirHumidity: 65,
+        SoilMoisture: 24,
+        VOC: 185,
+        Light: 720,
+        Barometricpressure: 1013.25,
         lastUpdate: Date.now(),
       };
 
-      expect(typeof sensorData.temperature).toBe('number');
-      expect(typeof sensorData.soilMoisture).toBe('number');
-      expect(sensorData.soilMoisture).toBeGreaterThanOrEqual(0);
-      expect(sensorData.soilMoisture).toBeLessThanOrEqual(100);
+      expect(typeof sensorData.AirTemp).toBe('number');
+      expect(typeof sensorData.SoilMoisture).toBe('number');
+      expect(sensorData.SoilMoisture).toBeGreaterThanOrEqual(0);
+      expect(sensorData.SoilMoisture).toBeLessThanOrEqual(100);
     });
   });
 });

@@ -40,16 +40,23 @@ describe('schema push plan', () => {
     expect(plan.keep).toEqual([]);
   });
 
-  it('never writes the prediction nodes, not even when forced', () => {
+  it('creates the prediction node when it is missing, then never touches it again', () => {
     const seed = { ...SEED, aiPredictions: { '3001': { type: 'rainfall' } } };
-    const plan = planSchemaPush(seed, {}, true);
-    expect(plan.write).not.toContain('aiPredictions');
-    expect(plan.refuse).toContain('aiPredictions');
 
+    const firstRun = planSchemaPush(seed, {});
+    expect(firstRun.write).toContain('aiPredictions');
+
+    // Once it holds history, even --force must not replace it.
+    const laterRun = planSchemaPush(seed, { aiPredictions: { '3001': { type: 'rainfall' } } }, true);
+    expect(laterRun.write).not.toContain('aiPredictions');
+    expect(laterRun.refuse).toContain('aiPredictions');
+  });
+
+  it('never writes the pipeline-owned nodes, not even when forced', () => {
     const withPipelineNodes = { ...SEED, AI_Predictions: {}, AI_Data: {}, AI_Suggestions: {} };
-    const plan2 = planSchemaPush(withPipelineNodes, {}, true);
-    expect(plan2.write).toEqual(Object.keys(SEED));
-    expect([...plan2.refuse].sort()).toEqual(['AI_Data', 'AI_Predictions', 'AI_Suggestions']);
+    const plan = planSchemaPush(withPipelineNodes, {}, true);
+    expect(plan.write).toEqual(Object.keys(SEED));
+    expect([...plan.refuse].sort()).toEqual(['AI_Data', 'AI_Predictions', 'AI_Suggestions']);
   });
 
   it('leaves the existing prediction history untouched when it is not part of the seed', () => {

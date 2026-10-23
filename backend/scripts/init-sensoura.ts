@@ -15,13 +15,13 @@ const now = Date.now();
 
 const sensouraData = {
   sensorData: {
-    temperature: 28.5,
-    soilTemperature: 22.3,
-    humidity: 65.2,
-    soilMoisture: 25.0,
-    gas: 180,
-    light: 720,
-    airPressure: 1013.25,
+    AirTemp: 28.5,
+    SoilTemp: 22.3,
+    AirHumidity: 65.2,
+    SoilMoisture: 25.0,
+    VOC: 180,
+    Light: 720,
+    Barometricpressure: 1013.25,
     lastUpdate: now,
   },
   system: {
@@ -35,6 +35,20 @@ const sensouraData = {
   commands: {},
   commandResults: {},
   aiSuggestions: {},
+  aiPredictions: {
+    '3001': {
+      type: 'rainfall',
+      predictedValue: 'after 2 days afternoon',
+      confidence: 0.85,
+      predictionTime: now + 2 * 60 * 60 * 1000,
+    },
+    '3002': {
+      type: 'air_temp',
+      predictedValue: 30.0,
+      confidence: 0.9,
+      predictionTime: now + 2 * 60 * 60 * 1000,
+    },
+  },
 };
 
 await set(ref(db, '/Sensoura'), sensouraData);

@@ -187,13 +187,13 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
     const now = Date.now();
     const count = Math.min(parseInt(limit), 500);
     const data = Array.from({ length: count }, (_, i) => ({
-      temperature: 28.4 + (Math.random() - 0.5) * 5,
-      soilTemperature: 22.5 + (Math.random() - 0.5) * 3,
-      humidity: 65 + (Math.random() - 0.5) * 10,
-      soilMoisture: Math.max(0, Math.min(100, 24 + (Math.random() - 0.5) * 20)),
-      gas: 185 + Math.floor((Math.random() - 0.5) * 50),
-      light: 720 + Math.floor((Math.random() - 0.5) * 200),
-      airPressure: 1013.25 + (Math.random() - 0.5) * 10,
+      AirTemp: 28.4 + (Math.random() - 0.5) * 5,
+      SoilTemp: 22.5 + (Math.random() - 0.5) * 3,
+      AirHumidity: 65 + (Math.random() - 0.5) * 10,
+      SoilMoisture: Math.max(0, Math.min(100, 24 + (Math.random() - 0.5) * 20)),
+      VOC: 185 + Math.floor((Math.random() - 0.5) * 50),
+      Light: 720 + Math.floor((Math.random() - 0.5) * 200),
+      Barometricpressure: 1013.25 + (Math.random() - 0.5) * 10,
       timestamp: now - (count - i) * 300000, // 5 min intervals
     }));
     return { data, count };
@@ -246,13 +246,13 @@ sensoura_memory_bytes{type="heapTotal"} ${mem.heapTotal}
 
 # HELP sensoura_sensor_value Current sensor readings
 # TYPE sensoura_sensor_value gauge
-sensoura_sensor_value{sensor="temperature"} ${sensorData?.temperature ?? 0}
-sensoura_sensor_value{sensor="soilTemperature"} ${sensorData?.soilTemperature ?? 0}
-sensoura_sensor_value{sensor="humidity"} ${sensorData?.humidity ?? 0}
-sensoura_sensor_value{sensor="soilMoisture"} ${sensorData?.soilMoisture ?? 0}
-sensoura_sensor_value{sensor="gas"} ${sensorData?.gas ?? 0}
-sensoura_sensor_value{sensor="light"} ${sensorData?.light ?? 0}
-sensoura_sensor_value{sensor="airPressure"} ${sensorData?.airPressure ?? 0}
+sensoura_sensor_value{sensor="AirTemp"} ${sensorData?.AirTemp ?? 0}
+sensoura_sensor_value{sensor="SoilTemp"} ${sensorData?.SoilTemp ?? 0}
+sensoura_sensor_value{sensor="AirHumidity"} ${sensorData?.AirHumidity ?? 0}
+sensoura_sensor_value{sensor="SoilMoisture"} ${sensorData?.SoilMoisture ?? 0}
+sensoura_sensor_value{sensor="VOC"} ${sensorData?.VOC ?? 0}
+sensoura_sensor_value{sensor="Light"} ${sensorData?.Light ?? 0}
+sensoura_sensor_value{sensor="Barometricpressure"} ${sensorData?.Barometricpressure ?? 0}
 
 # HELP sensoura_relay_state Relay state (1=ON, 0=OFF)
 # TYPE sensoura_relay_state gauge

@@ -1,11 +1,11 @@
 export interface SensorData {
-  temperature: number;
-  soilTemperature: number;
-  humidity: number;
-  soilMoisture: number;
-  gas: number;
-  light: number;
-  airPressure: number;
+  AirTemp: number;
+  SoilTemp: number;
+  AirHumidity: number;
+  SoilMoisture: number;
+  VOC: number;
+  Light: number;
+  Barometricpressure: number;
   lastUpdate: number;
 }
 

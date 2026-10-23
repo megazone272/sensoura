@@ -34,20 +34,24 @@ structure the pipeline reads and appends to:
 
 `npm run inspect:legacy` (read-only, `backend/scripts/inspect-legacy-predictions.ts`)
 prints the database root, the keys under `/Sensoura`, and the parsed contents of
-the prediction node. Last run (2026-10-21, project `on-an-official-team`):
+the prediction node. Last run (2026-10-23, project `on-an-official-team`):
 
 ```
 database root keys: Sensoura
-/Sensoura keys: aiSuggestions, commandResults, commands, sensorData, system
+/Sensoura keys: AI_Data, AI_Predictions, AI_Suggestions,
+                aiSuggestions, commandResults, commands, sensorData, system
 /Sensoura/aiPredictions: the node does not exist.
 /aiPredictions: the node does not exist.
 ```
 
-So in *this* project the node is currently empty — the pipeline creates it the
-first time it appends a record, and it never touches the other nodes. The
-reader is written for the full node either way: a missing node reads as
-`present: false` with zero records, which is not an error and produces no
-warning beyond the count in the cycle statistics.
+The pipeline nodes (`AI_Data`, `AI_Predictions`, `AI_Suggestions`) are the ones
+it created itself. `/Sensoura/aiPredictions` is still absent: `npm run db:push`
+creates it once from the two seed records in
+`backend/src/config/sensoura-initial-data.json` and refuses to write it again
+afterwards, even with `--force`. The pipeline then appends to it, and it never
+touches the other nodes. The reader is written for the full node either way: a
+missing node reads as `present: false` with zero records, which is not an error
+and produces no warning beyond the count in the cycle statistics.
 
 Properties of the structure:
 
@@ -115,7 +119,7 @@ The plan has five rules. Each one is enforced in code and covered by tests in
 | `/Sensoura/system` | legacy backend / firmware | Read-only |
 | `/Sensoura/commands` | legacy backend | Never |
 | `/Sensoura/aiSuggestions` | legacy dashboard (auto-executes) | **Never** |
-| `/Sensoura/aiPredictions` | pre-existing data | **Append-only** (new ids only) |
+| `/Sensoura/aiPredictions` | seeded once by `db:push`, then history | **Append-only** (new ids only) |
 | `/Sensoura/AI_Predictions` | this pipeline | Yes (rich, versioned records) |
 | `/Sensoura/AI_Suggestions` | this pipeline | Yes (rich, versioned records) |
 | `/Sensoura/AI_Data/**` | this pipeline | Yes (series, observations, executions, locks) |
@@ -279,19 +283,19 @@ classifications mean:
 
 ### The seven local sensors
 
-| Local field (repo name) | Alias | Unit | External variable | Provider | Unit | Classification | Comparable? |
+| Database field | Legacy field (accepted on read) | Unit | External variable | Provider | Unit | Classification | Comparable? |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `temperature` | `AirTemp` | °C | `temperature_2m` | Open-Meteo | °C | `unit_comparable_outdoor_reference` | yes |
-| `temperature` | `AirTemp` | °C | `T2M` | NASA POWER | °C | `unit_comparable_outdoor_reference` | yes |
-| `soilTemperature` | `SoilTemp` | °C | `soil_temperature_0cm` | Open-Meteo | °C | `derived_estimate` | no |
-| `soilTemperature` | `SoilTemp` | °C | `TS` | NASA POWER | °C | `derived_estimate` | no |
-| `humidity` | `AirHumidity` | % | `relative_humidity_2m` | Open-Meteo | % | `unit_comparable_outdoor_reference` | yes |
-| `humidity` | `AirHumidity` | % | `RH2M` | NASA POWER | % | `unit_comparable_outdoor_reference` | yes |
-| `soilMoisture` | `SoilMoisture` | % (ADC index) | `soil_moisture_0_to_1cm` | Open-Meteo | m³/m³ | `unsupported` | no |
-| `gas` | `VOC` | counts / VOC Index | `pm2_5`, `pm10`, `carbon_monoxide`, `nitrogen_dioxide`, `ozone`, `aerosol_optical_depth` | Open-Meteo | µg/m³ / 1 | `unsupported` | no |
-| `light` | `Light` | counts (or % on the alias field) | `shortwave_radiation` | Open-Meteo | W/m² | `unsupported` | no |
-| `light` | `Light` | counts | `ALLSKY_SFC_SW_DWN` | NASA POWER | MJ/hr | `unsupported` | no |
-| `airPressure` | `Barometricpressure` | hPa | `surface_pressure` | Open-Meteo | hPa | `unit_comparable_outdoor_reference` | yes |
+| `AirTemp` | `temperature` | °C | `temperature_2m` | Open-Meteo | °C | `unit_comparable_outdoor_reference` | yes |
+| `AirTemp` | `temperature` | °C | `T2M` | NASA POWER | °C | `unit_comparable_outdoor_reference` | yes |
+| `SoilTemp` | `soilTemperature` | °C | `soil_temperature_0cm` | Open-Meteo | °C | `derived_estimate` | no |
+| `SoilTemp` | `soilTemperature` | °C | `TS` | NASA POWER | °C | `derived_estimate` | no |
+| `AirHumidity` | `humidity` | % | `relative_humidity_2m` | Open-Meteo | % | `unit_comparable_outdoor_reference` | yes |
+| `AirHumidity` | `humidity` | % | `RH2M` | NASA POWER | % | `unit_comparable_outdoor_reference` | yes |
+| `SoilMoisture` | `soilMoisture` | % (ADC index) | `soil_moisture_0_to_1cm` | Open-Meteo | m³/m³ | `unsupported` | no |
+| `VOC` | `gas` | counts / VOC Index | `pm2_5`, `pm10`, `carbon_monoxide`, `nitrogen_dioxide`, `ozone`, `aerosol_optical_depth` | Open-Meteo | µg/m³ / 1 | `unsupported` | no |
+| `Light` | `light` | counts (or % on the legacy field) | `shortwave_radiation` | Open-Meteo | W/m² | `unsupported` | no |
+| `Light` | `light` | counts | `ALLSKY_SFC_SW_DWN` | NASA POWER | MJ/hr | `unsupported` | no |
+| `Barometricpressure` | `airPressure` | hPa | `surface_pressure` | Open-Meteo | hPa | `unit_comparable_outdoor_reference` | yes |
 | — | — | — | `PRECTOTCORR` | NASA POWER | mm/hour | `external_only` | no |
 | — | — | — | `WS2M` | NASA POWER | m/s | `external_only` | no |
 
@@ -300,9 +304,9 @@ classifications mean:
 | Refused conversion | Why |
 | --- | --- |
 | `VOC` index → any external variable | No provider here measures a VOC-equivalent quantity. The MQ135 also has no R0/load-resistor calibration, so its reading is not a concentration at all. `assertNotVocTarget()` rejects any VOC-named calibration target. |
-| `light` counts → lux / PAR / W/m² | The photoresistor's spectral response and circuit gain are uncalibrated. The external irradiance is broadband on a horizontal plane. A daylight recommendation is therefore never issued from the local light value. |
-| `soilMoisture` index → m³/m³ | The local value is an ADC-derived relative index (3200…1200 → 0…100); the provider value is modeled volumetric water content for open soil. Converting one to the other would need substrate-specific calibration that does not exist. |
-| `soilTemperature` → `TS` / `soil_temperature_0cm` | Earth skin temperature and modeled 0 cm soil temperature are neither the probe reading nor its depth equivalent; the DS18B20 insertion depth is undocumented in the firmware. |
+| `Light` counts → lux / PAR / W/m² | The photoresistor's spectral response and circuit gain are uncalibrated. The external irradiance is broadband on a horizontal plane. A daylight recommendation is therefore never issued from the local light value. |
+| `SoilMoisture` index → m³/m³ | The local value is an ADC-derived relative index (3200…1200 → 0…100); the provider value is modeled volumetric water content for open soil. Converting one to the other would need substrate-specific calibration that does not exist. |
+| `SoilTemp` → `TS` / `soil_temperature_0cm` | Earth skin temperature and modeled 0 cm soil temperature are neither the probe reading nor its depth equivalent; the DS18B20 insertion depth is undocumented in the firmware. |
 
 The outdoor comparison is still **useful** even where it is not a calibration
 reference: the decision engine compares indoor and outdoor air temperature and

@@ -1,12 +1,12 @@
 {
   "sensorData": {
-    "temperature": 28.4,
-    "soilTemperature": 22.5,
-    "humidity": 65.0,
-    "soilMoisture": 24.0,
-    "gas": 185,
-    "light": 720,
-    "airPressure": 1013.25,
+    "AirTemp": 28.4,
+    "SoilTemp": 22.5,
+    "AirHumidity": 65.0,
+    "SoilMoisture": 24.0,
+    "VOC": 185,
+    "Light": 60,
+    "Barometricpressure": 1013.25,
     "lastUpdate": 1791864000000
   },
   "system": {
@@ -100,6 +100,20 @@
       "requiresApproval": true,
       "createdAt": 1791864010000,
       "expiresAt": 1791867610000
+    }
+  },
+  "aiPredictions": {
+    "3001": {
+      "type": "rainfall",
+      "predictedValue": "after 2 days afternoon",
+      "confidence": 0.85,
+      "predictionTime": 1791867600000
+    },
+    "3002": {
+      "type": "air_temp",
+      "predictedValue": 30.0,
+      "confidence": 0.9,
+      "predictionTime": 1791867600000
     }
   }
 }

@@ -10,20 +10,20 @@ describe('Shared Types', () => {
   describe('SensorData', () => {
     it('should validate sensor readings', () => {
       const data: SensorData = {
-        temperature: 28.4,
-        soilTemperature: 22.5,
-        humidity: 65,
-        soilMoisture: 24,
-        gas: 185,
-        light: 720,
-        airPressure: 1013.25,
+        AirTemp: 28.4,
+        SoilTemp: 22.5,
+        AirHumidity: 65,
+        SoilMoisture: 24,
+        VOC: 185,
+        Light: 720,
+        Barometricpressure: 1013.25,
         lastUpdate: Date.now(),
       };
 
-      expect(typeof data.temperature).toBe('number');
-      expect(typeof data.humidity).toBe('number');
-      expect(data.humidity).toBeGreaterThanOrEqual(0);
-      expect(data.humidity).toBeLessThanOrEqual(100);
+      expect(typeof data.AirTemp).toBe('number');
+      expect(typeof data.AirHumidity).toBe('number');
+      expect(data.AirHumidity).toBeGreaterThanOrEqual(0);
+      expect(data.AirHumidity).toBeLessThanOrEqual(100);
     });
   });
 

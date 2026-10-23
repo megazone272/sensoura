@@ -49,8 +49,8 @@ async function main() {
   const snap = await db.ref('/Sensoura/sensorData').get();
   ok('GET /Sensoura/sensorData exists', snap.exists());
   const sensor = snap.val() as Record<string, unknown> | null;
-  ok('temperature is number', typeof sensor?.temperature === 'number', `got ${sensor?.temperature}`);
-  ok('humidity is number', typeof sensor?.humidity === 'number', `got ${sensor?.humidity}`);
+  ok('temperature is number', typeof sensor?.AirTemp === 'number', `got ${sensor?.AirTemp}`);
+  ok('humidity is number', typeof sensor?.AirHumidity === 'number', `got ${sensor?.AirHumidity}`);
   console.log('        sensorData snapshot:', JSON.stringify(sensor)?.slice(0, 160));
 
   const sysSnap = await db.ref('/Sensoura/system').get();
@@ -137,12 +137,12 @@ async function main() {
   // -> socket broadcast to this client.
   const liveData = (snap.val() as Record<string, unknown>);
   const broadcastSeen = new Promise<boolean>((resolve) => {
-    socket.on('sensorData', (payload: { sensorData?: { temperature?: number } } | null) => resolve(!!payload?.sensorData?.temperature));
+    socket.on('sensorData', (payload: { sensorData?: { AirTemp?: number } } | null) => resolve(!!payload?.sensorData?.AirTemp));
     setTimeout(() => resolve(false), 10_000);
   });
   await db.ref('/Sensoura/sensorData').update({
     ...liveData,
-    light: (typeof liveData.light === 'number' ? liveData.light : 700) + 1,
+    Light: (typeof liveData.Light === 'number' ? liveData.Light : 700) + 1,
     lastUpdate: Date.now(),
   });
   ok('Firebase write -> backend listener -> socket sensorData broadcast', await broadcastSeen);

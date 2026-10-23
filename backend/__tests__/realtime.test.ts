@@ -15,8 +15,8 @@ describe('Realtime Service', () => {
   it('should have sensorData', () => {
     const data = realtimeService.getSensorData();
     expect(data).not.toBeNull();
-    expect(data.temperature).toBeDefined();
-    expect(data.humidity).toBeDefined();
+    expect(data.AirTemp).toBeDefined();
+    expect(data.AirHumidity).toBeDefined();
   });
 
   it('should have system status', () => {

@@ -106,13 +106,13 @@ describe('SensorStore', () => {
   describe('internal setters', () => {
     it('_setSensorData should update sensorData', () => {
       const data: SensorData = {
-        temperature: 25,
-        soilTemperature: 20,
-        humidity: 50,
-        soilMoisture: 40,
-        gas: 100,
-        light: 500,
-        airPressure: 1013,
+        AirTemp: 25,
+        SoilTemp: 20,
+        AirHumidity: 50,
+        SoilMoisture: 40,
+        VOC: 100,
+        Light: 500,
+        Barometricpressure: 1013,
         lastUpdate: Date.now(),
       };
 

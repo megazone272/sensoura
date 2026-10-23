@@ -1,11 +1,11 @@
 export interface SensorData {
-  temperature: number;
-  soilTemperature: number;
-  humidity: number;
-  soilMoisture: number;
-  gas: number;
-  light: number;
-  airPressure: number;
+  AirTemp: number;
+  SoilTemp: number;
+  AirHumidity: number;
+  SoilMoisture: number;
+  VOC: number;
+  Light: number;
+  Barometricpressure: number;
   lastUpdate: number;
 }
 
@@ -82,13 +82,13 @@ export interface SensouraState {
 import { z } from 'zod';
 
 export const sensorDataSchema = z.object({
-  temperature: z.number().min(-40).max(85),
-  soilTemperature: z.number().min(-40).max(85),
-  humidity: z.number().min(0).max(100),
-  soilMoisture: z.number().min(0).max(100),
-  gas: z.number().min(0).max(10000),
-  light: z.number().min(0).max(200000),
-  airPressure: z.number().min(800).max(1200),
+  AirTemp: z.number().min(-40).max(85),
+  SoilTemp: z.number().min(-40).max(85),
+  AirHumidity: z.number().min(0).max(100),
+  SoilMoisture: z.number().min(0).max(100),
+  VOC: z.number().min(0).max(10000),
+  Light: z.number().min(0).max(200000),
+  Barometricpressure: z.number().min(800).max(1200),
   lastUpdate: z.number(),
 });
 

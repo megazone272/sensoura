@@ -275,13 +275,13 @@ export const mockDb = new MockDatabase();
 if (!isFirebaseEnabled()) {
   mockDb.set('/Sensoura', {
     sensorData: {
-      temperature: 28.4,
-      soilTemperature: 22.5,
-      humidity: 65.0,
-      soilMoisture: 24.0,
-      gas: 185,
-      light: 720,
-      airPressure: 1013.25,
+      AirTemp: 28.4,
+      SoilTemp: 22.5,
+      AirHumidity: 65.0,
+      SoilMoisture: 24.0,
+      VOC: 185,
+      Light: 720,
+      Barometricpressure: 1013.25,
       lastUpdate: Date.now(),
     },
     system: {

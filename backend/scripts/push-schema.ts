@@ -13,14 +13,21 @@ const initialData = JSON.parse(
 );
 
 /**
- * Nodes the schema push must never write to.
- *
- * `/Sensoura/aiPredictions` holds pre-existing prediction history; the
- * `AI_*` nodes belong to the AI pipeline. Seeding the schema must not
- * destroy them, so they are refused explicitly even if the seed file ever
- * grows a key with one of these names.
+ * Nodes that belong to the AI pipeline. They are produced by the pipeline
+ * itself, never seeded, so a schema push refuses them outright even if the
+ * seed file ever grows a key with one of these names.
  */
-const PROTECTED_KEYS = ['aiPredictions', 'AI_Predictions', 'AI_Suggestions', 'AI_Data'];
+const PIPELINE_OWNED_KEYS = ['AI_Predictions', 'AI_Suggestions', 'AI_Data'];
+
+/**
+ * Create-once nodes: part of the main tree, but holding history.
+ *
+ * `/Sensoura/aiPredictions` starts with the seed records and then accumulates
+ * predictions, so the push may create it when it is missing but must never
+ * overwrite it afterwards — not even with `--force`, which only applies to
+ * ordinary seeded nodes.
+ */
+const CREATE_ONCE_KEYS = ['aiPredictions'];
 
 export interface SchemaPushPlan {
   /** Keys to write. */
@@ -35,8 +42,8 @@ export interface SchemaPushPlan {
  * Decide what a schema push is allowed to write.
  *
  * Pure, so the rule can be tested without a database: a key that already
- * exists is kept unless `force` is set, and a protected key is never
- * written at all.
+ * exists is kept unless `force` is set, a pipeline-owned key is never written
+ * at all, and a create-once key is written only while it is still missing.
  */
 export function planSchemaPush(
   seed: Record<string, unknown>,
@@ -45,8 +52,15 @@ export function planSchemaPush(
 ): SchemaPushPlan {
   const plan: SchemaPushPlan = { write: [], keep: [], refuse: [] };
   for (const key of Object.keys(seed)) {
-    if (PROTECTED_KEYS.includes(key)) {
+    if (PIPELINE_OWNED_KEYS.includes(key)) {
       plan.refuse.push(key);
+      continue;
+    }
+    if (CREATE_ONCE_KEYS.includes(key)) {
+      // Create it only while it is missing; existing history is protected
+      // from `--force` as well.
+      if (key in existing) plan.refuse.push(key);
+      else plan.write.push(key);
       continue;
     }
     if (key in existing && !force) {

@@ -26,13 +26,13 @@ interface SensorConfig {
 }
 
 const sensorConfig: SensorConfig[] = [
-  { key: 'temperature', label: 'Air Temp', unit: '°C', icon: Thermometer, color: '#ef4444', min: -10, max: 50 },
-  { key: 'soilTemperature', label: 'Soil Temp', unit: '°C', icon: Thermometer, color: '#f97316', min: -10, max: 50 },
-  { key: 'humidity', label: 'Humidity', unit: '%', icon: Droplets, color: '#06b6d4', min: 0, max: 100 },
-  { key: 'soilMoisture', label: 'Soil Moisture', unit: '%', icon: Droplet, color: '#22c55e', min: 0, max: 100 },
-  { key: 'gas', label: 'Gas (MQ135)', unit: 'ppm', icon: Flame, color: '#fbbf24', min: 0, max: 500 },
-  { key: 'light', label: 'Light', unit: 'lux', icon: Sun, color: '#fde047', min: 0, max: 100000 },
-  { key: 'airPressure', label: 'Pressure', unit: 'hPa', icon: Gauge, color: '#a855f7', min: 900, max: 1100 },
+  { key: 'AirTemp', label: 'Air Temp', unit: '°C', icon: Thermometer, color: '#ef4444', min: -10, max: 50 },
+  { key: 'SoilTemp', label: 'Soil Temp', unit: '°C', icon: Thermometer, color: '#f97316', min: -10, max: 50 },
+  { key: 'AirHumidity', label: 'Humidity', unit: '%', icon: Droplets, color: '#06b6d4', min: 0, max: 100 },
+  { key: 'SoilMoisture', label: 'Soil Moisture', unit: '%', icon: Droplet, color: '#22c55e', min: 0, max: 100 },
+  { key: 'VOC', label: 'Gas (MQ135)', unit: 'ppm', icon: Flame, color: '#fbbf24', min: 0, max: 500 },
+  { key: 'Light', label: 'Light', unit: 'lux', icon: Sun, color: '#fde047', min: 0, max: 100000 },
+  { key: 'Barometricpressure', label: 'Pressure', unit: 'hPa', icon: Gauge, color: '#a855f7', min: 900, max: 1100 },
 ];
 
 function SensorCard({ data, config, history }: { data: any; config: SensorConfig; history: number[] }) {
@@ -49,7 +49,7 @@ function SensorCard({ data, config, history }: { data: any; config: SensorConfig
             {config.label}
           </p>
           <p className="text-lg font-bold font-mono text-[var(--text-primary)] whitespace-nowrap">
-            {typeof value === 'number' ? value.toFixed(config.key === 'airPressure' ? 2 : 1) : value}
+            {typeof value === 'number' ? value.toFixed(config.key === 'Barometricpressure' ? 2 : 1) : value}
             <span className="text-[11px] font-normal text-[var(--text-muted)] ml-1">{config.unit}</span>
           </p>
         </div>

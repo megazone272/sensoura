@@ -27,9 +27,9 @@ async function verifySystem() {
       console.log('   Sensor data:', sensorSnap.exists() ? '✅ Found' : '❌ Empty');
       if (sensorSnap.exists()) {
         const data = sensorSnap.val();
-        console.log('   - temperature:', data.temperature);
-        console.log('   - soilMoisture:', data.soilMoisture);
-        console.log('   - humidity:', data.humidity);
+        console.log('   - temperature:', data.AirTemp);
+        console.log('   - soilMoisture:', data.SoilMoisture);
+        console.log('   - humidity:', data.AirHumidity);
       }
       
       const systemSnap = await db.ref('/Sensoura/system').get();
@@ -51,8 +51,8 @@ async function verifySystem() {
     try {
       const data = await restClient.get('/Sensoura/sensorData');
       console.log('   ✅ REST read successful');
-      console.log('   - gas:', data.gas);
-      console.log(' - light:', data.light);
+      console.log('   - gas:', data.VOC);
+      console.log(' - light:', data.Light);
     } catch (err) {
       console.error('   ❌ REST read error:', err.message);
     }
