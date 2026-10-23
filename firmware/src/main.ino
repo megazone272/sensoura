@@ -222,13 +222,15 @@ SensorReadings readSensors() {
 // ======================= FIREBASE PUSH ======================
 void pushTelemetry(const SensorReadings& r) {
   JsonDocument doc;
-  doc["temperature"]      = roundf(r.temperature * 100) / 100.0f;
-  doc["soilTemperature"]  = roundf(r.soilTemperature * 100) / 100.0f;
-  doc["humidity"]         = roundf(r.humidity * 100) / 100.0f;
-  doc["soilMoisture"]     = roundf(r.soilMoisture * 100) / 100.0f;
-  doc["gas"]              = r.gas;
-  doc["light"]            = r.light;
-  doc["airPressure"]      = roundf(r.airPressure * 100) / 100.0f;
+  // These keys are the database contract for /Sensoura/sensorData; they are
+  // deliberately not the same as the internal SensorReadings member names.
+  doc["AirTemp"]          = roundf(r.temperature * 100) / 100.0f;
+  doc["SoilTemp"]         = roundf(r.soilTemperature * 100) / 100.0f;
+  doc["AirHumidity"]      = roundf(r.humidity * 100) / 100.0f;
+  doc["SoilMoisture"]     = roundf(r.soilMoisture * 100) / 100.0f;
+  doc["VOC"]              = r.gas;
+  doc["Light"]            = r.light;
+  doc["Barometricpressure"] = roundf(r.airPressure * 100) / 100.0f;
   doc["lastUpdate"]       = (uint32_t)time(nullptr);
 
   String json;

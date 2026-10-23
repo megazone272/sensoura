@@ -156,7 +156,7 @@ export class AIEngine {
       trainedAt: Date.now(),
       samplesCount: 1000,
       accuracy: 0.87,
-      features: ['temperature', 'soilTemperature', 'humidity', 'soilMoisture', 'gas', 'light', 'airPressure', 'hourOfDay', 'dayOfYear'],
+      features: ['AirTemp', 'SoilTemp', 'AirHumidity', 'SoilMoisture', 'VOC', 'Light', 'Barometricpressure', 'hourOfDay', 'dayOfYear'],
       backend: 'tfjs-node',
     };
 
@@ -392,13 +392,13 @@ export class AIEngine {
   predictSoilMoisture(current: SensorData, hoursAhead: number = 6): number {
     const now = new Date();
     const features = [
-      current.temperature,
-      current.soilTemperature,
-      current.humidity,
-      current.soilMoisture,
-      current.gas,
-      current.light,
-      current.airPressure,
+      current.AirTemp,
+      current.SoilTemp,
+      current.AirHumidity,
+      current.SoilMoisture,
+      current.VOC,
+      current.Light,
+      current.Barometricpressure,
       now.getHours(),
       this.dayOfYear(now),
     ];
@@ -407,39 +407,39 @@ export class AIEngine {
     if (tfValue !== null) return Math.max(0, Math.min(100, tfValue));
 
     // Fallback 1: linear trend from observed history
-    const trend = this.extrapolateTrend('soilMoisture', hoursAhead);
+    const trend = this.extrapolateTrend('SoilMoisture', hoursAhead);
     if (trend !== null) return Math.max(0, Math.min(100, trend));
 
     // Fallback 2: evapotranspiration heuristic
     const hour = now.getHours();
     const daylight = hour > 6 && hour < 18 ? Math.sin(((hour - 6) / 12) * Math.PI) : 0;
     const evapotranspiration =
-      hoursAhead * (0.04 * current.temperature + 0.02 * daylight * (current.light / 1000) - 0.01 * (current.humidity / 10));
-    return Math.max(0, Math.min(100, current.soilMoisture - evapotranspiration));
+      hoursAhead * (0.04 * current.AirTemp + 0.02 * daylight * (current.Light / 1000) - 0.01 * (current.AirHumidity / 10));
+    return Math.max(0, Math.min(100, current.SoilMoisture - evapotranspiration));
   }
 
   predictGasLevel(current: SensorData, hoursAhead: number = 3): number {
     const now = new Date();
-    const features = [current.temperature, current.humidity, current.airPressure, now.getHours(), current.gas];
+    const features = [current.AirTemp, current.AirHumidity, current.Barometricpressure, now.getHours(), current.VOC];
 
     const tfValue = this.predictWithModel(this.gasModel, features);
     if (tfValue !== null) return Math.max(0, tfValue);
 
-    const trend = this.extrapolateTrend('gas', hoursAhead);
+    const trend = this.extrapolateTrend('VOC', hoursAhead);
     if (trend !== null) return Math.max(0, trend);
 
     // Fallback: gas accumulates with heat and poor ventilation
-    const drift = hoursAhead * (0.4 * Math.max(0, current.temperature - 20) + 0.05 * (100 - current.humidity) * 0.1);
-    return Math.max(0, current.gas + drift);
+    const drift = hoursAhead * (0.4 * Math.max(0, current.AirTemp - 20) + 0.05 * (100 - current.AirHumidity) * 0.1);
+    return Math.max(0, current.VOC + drift);
   }
 
   predictTemperature(current: SensorData, hoursAhead: number = 12): number {
     const now = new Date();
     const features = [
-      current.temperature,
-      current.humidity,
-      current.airPressure,
-      current.light,
+      current.AirTemp,
+      current.AirHumidity,
+      current.Barometricpressure,
+      current.Light,
       now.getHours(),
       this.dayOfYear(now),
     ];
@@ -453,7 +453,7 @@ export class AIEngine {
     const diurnal = 5 * Math.sin((targetHour / 24) * 2 * Math.PI);
     const baseline = 15 + seasonal + diurnal;
     // Blend with the current reading so we stay anchored to reality
-    return current.temperature * 0.6 + baseline * 0.4;
+    return current.AirTemp * 0.6 + baseline * 0.4;
   }
 
   predictHarvestDate(avgConditions: {
@@ -504,7 +504,7 @@ export class AIEngine {
     const predictedTemp = this.predictTemperature(current, 12);
 
     // Irrigation prediction
-    if (predictedSoilMoisture < 30 && current.soilMoisture >= 30) {
+    if (predictedSoilMoisture < 30 && current.SoilMoisture >= 30) {
       suggestions.push({
         type: 'irrigation',
         suggestion: `Predictive irrigation needed in ~6 hours (soil moisture will drop to ${predictedSoilMoisture.toFixed(1)}%)`,
@@ -512,18 +512,18 @@ export class AIEngine {
         recommendedAction: { target: 'pump', action: 'ON', mode: 'AUTO' },
         confidence: 0.85,
       });
-    } else if (current.soilMoisture < 30) {
+    } else if (current.SoilMoisture < 30) {
       suggestions.push({
         type: 'irrigation',
         suggestion: 'Start irrigation now',
-        reason: `Current soil moisture at ${current.soilMoisture.toFixed(1)}% — below 30% threshold`,
+        reason: `Current soil moisture at ${current.SoilMoisture.toFixed(1)}% — below 30% threshold`,
         recommendedAction: { target: 'pump', action: 'ON', mode: 'MANUAL' },
         confidence: 0.95,
       });
     }
 
     // Gas warning
-    if (predictedGas > 250 && current.gas <= 250) {
+    if (predictedGas > 250 && current.VOC <= 250) {
       suggestions.push({
         type: 'environment',
         suggestion: `Gas levels predicted to exceed 250 ppm in ~3 hours (predicted: ${predictedGas.toFixed(0)} ppm)`,
@@ -531,11 +531,11 @@ export class AIEngine {
         recommendedAction: { target: 'gasSensor', action: 'CHECK_SENSOR', mode: null },
         confidence: 0.82,
       });
-    } else if (current.gas > 200) {
+    } else if (current.VOC > 200) {
       suggestions.push({
         type: 'environment',
         suggestion: 'Check gas sensor readings',
-        reason: `Current gas at ${current.gas} ppm — approaching warning threshold`,
+        reason: `Current gas at ${current.VOC} ppm — approaching warning threshold`,
         recommendedAction: { target: 'gasSensor', action: 'CHECK_SENSOR', mode: null },
         confidence: 0.9,
       });
@@ -556,10 +556,10 @@ export class AIEngine {
     if (Math.random() < 0.1) {
       // Simulate weekly check
       const harvestDays = this.predictHarvestDate({
-        avgTemp: current.temperature,
-        avgSoilMoisture: current.soilMoisture,
-        avgHumidity: current.humidity,
-        totalLight: current.light * 24,
+        avgTemp: current.AirTemp,
+        avgSoilMoisture: current.SoilMoisture,
+        avgHumidity: current.AirHumidity,
+        totalLight: current.Light * 24,
         stressEvents: 0,
       });
       suggestions.push({
@@ -582,9 +582,9 @@ export class AIEngine {
   } {
     return {
       models: {
-        soilMoisture: !!this.soilMoistureModel,
-        gas: !!this.gasModel,
-        temperature: !!this.temperatureModel,
+        SoilMoisture: !!this.soilMoistureModel,
+        VOC: !!this.gasModel,
+        AirTemp: !!this.temperatureModel,
         harvest: !!this.harvestModel,
       },
       metadata: this.metadata,

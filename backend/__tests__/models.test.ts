@@ -12,35 +12,35 @@ describe('Data Models', () => {
   describe('SensorData', () => {
     it('should have all required fields', () => {
       const sensorData: SensorData = {
-        temperature: 28.4,
-        soilTemperature: 22.5,
-        humidity: 65,
-        soilMoisture: 24,
-        gas: 185,
-        light: 720,
-        airPressure: 1013.25,
+        AirTemp: 28.4,
+        SoilTemp: 22.5,
+        AirHumidity: 65,
+        SoilMoisture: 24,
+        VOC: 185,
+        Light: 720,
+        Barometricpressure: 1013.25,
         lastUpdate: Date.now(),
       };
 
-      expect(sensorData.temperature).toBeDefined();
-      expect(sensorData.soilTemperature).toBeDefined();
-      expect(sensorData.humidity).toBeDefined();
-      expect(sensorData.soilMoisture).toBeDefined();
-      expect(sensorData.gas).toBeDefined();
-      expect(sensorData.light).toBeDefined();
-      expect(sensorData.airPressure).toBeDefined();
+      expect(sensorData.AirTemp).toBeDefined();
+      expect(sensorData.SoilTemp).toBeDefined();
+      expect(sensorData.AirHumidity).toBeDefined();
+      expect(sensorData.SoilMoisture).toBeDefined();
+      expect(sensorData.VOC).toBeDefined();
+      expect(sensorData.Light).toBeDefined();
+      expect(sensorData.Barometricpressure).toBeDefined();
       expect(sensorData.lastUpdate).toBeDefined();
     });
 
     it('should accept valid ranges', () => {
       const validData: SensorData = {
-        temperature: 0, // -50 to 60 typically
-        soilTemperature: 0,
-        humidity: 0, // 0-100%
-        soilMoisture: 0, // 0-100%
-        gas: 0,
-        light: 0,
-        airPressure: 900,
+        AirTemp: 0, // -50 to 60 typically
+        SoilTemp: 0,
+        AirHumidity: 0, // 0-100%
+        SoilMoisture: 0, // 0-100%
+        VOC: 0,
+        Light: 0,
+        Barometricpressure: 900,
         lastUpdate: Date.now(),
       };
 

@@ -20,13 +20,13 @@ import { format } from 'date-fns';
 import { useSensorData, useSystem, useConnection } from '@store/sensorStore';
 
 const sensorConfig = [
-  { key: 'temperature', label: 'Air Temp', unit: '°C', icon: Thermometer, color: '#ef4444' },
-  { key: 'soilTemperature', label: 'Soil Temp', unit: '°C', icon: Thermometer, color: '#f97316' },
-  { key: 'humidity', label: 'Humidity', unit: '%', icon: Droplets, color: '#06b6d4' },
-  { key: 'soilMoisture', label: 'Soil Moisture', unit: '%', icon: Droplets, color: '#22c55e' },
-  { key: 'gas', label: 'Gas (MQ135)', unit: 'ppm', icon: Flame, color: '#fbbf24' },
-  { key: 'light', label: 'Light', unit: 'lux', icon: Sun, color: '#fde047' },
-  { key: 'airPressure', label: 'Air Pressure', unit: 'hPa', icon: Gauge, color: '#a855f7' },
+  { key: 'AirTemp', label: 'Air Temp', unit: '°C', icon: Thermometer, color: '#ef4444' },
+  { key: 'SoilTemp', label: 'Soil Temp', unit: '°C', icon: Thermometer, color: '#f97316' },
+  { key: 'AirHumidity', label: 'Humidity', unit: '%', icon: Droplets, color: '#06b6d4' },
+  { key: 'SoilMoisture', label: 'Soil Moisture', unit: '%', icon: Droplets, color: '#22c55e' },
+  { key: 'VOC', label: 'Gas (MQ135)', unit: 'ppm', icon: Flame, color: '#fbbf24' },
+  { key: 'Light', label: 'Light', unit: 'lux', icon: Sun, color: '#fde047' },
+  { key: 'Barometricpressure', label: 'Air Pressure', unit: 'hPa', icon: Gauge, color: '#a855f7' },
 ] as const;
 
 export function Sensors() {
@@ -155,7 +155,7 @@ export function Sensors() {
                 <div>
                   <p className="text-sm text-[var(--text-muted)]">{sensor.label}</p>
                   <p className="text-2xl font-bold font-mono" style={{ color: sensor.color }}>
-                    {typeof value === 'number' ? value.toFixed(sensor.key === 'airPressure' ? 2 : 1) : '--'}
+                    {typeof value === 'number' ? value.toFixed(sensor.key === 'Barometricpressure' ? 2 : 1) : '--'}
                   </p>
                 </div>
               </div>

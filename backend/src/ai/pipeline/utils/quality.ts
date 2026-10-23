@@ -2,25 +2,25 @@
  * Data validation for the greenhouse node.
  *
  * Field names, ranges and units come from the firmware and the existing
- * `sensorDataSchema` (backend/src/models/sensoura.ts):
- *   temperature       DHT11 air temperature, °C
- *   soilTemperature   DS18B20 probe, °C (depth not documented by the firmware)
- *   humidity          DHT11 relative humidity, %
- *   soilMoisture      mapped ADC value 0..100, NOT volumetric water content
- *   gas               MQ135 raw ADC counts (12-bit), NOT ppm and NOT a VOC index
- *   light             photoresistor raw ADC counts (12-bit), NOT lux / PAR
- *   airPressure       BMP180 absolute pressure, hPa
- *   lastUpdate        Unix SECONDS in firmware (`time(nullptr)`), ms in seeds
+ * `sensorDataSchema` (backend/src/models/sensoura.ts). The database contract
+ * for `/Sensoura/sensorData` is:
+ *   AirTemp            DHT11 air temperature, °C
+ *   SoilTemp           DS18B20 probe, °C (depth not documented by the firmware)
+ *   AirHumidity        DHT11 relative humidity, %
+ *   SoilMoisture       mapped ADC value 0..100, NOT volumetric water content
+ *   VOC                MQ135 raw ADC counts (12-bit), NOT ppm and NOT a VOC index
+ *   Light              photoresistor raw ADC counts (12-bit), NOT lux / PAR
+ *   Barometricpressure BMP180 absolute pressure, hPa
+ *   lastUpdate         Unix SECONDS in firmware (`time(nullptr)`), ms in seeds
  *
- * A second, alternative spelling set is accepted as an ALIAS of the same
- * physical variable (it is the schema documented in the project brief):
- *   AirTemp, SoilTemp, AirHumidity, SoilMoisture, VOC, Light, Barometricpressure
+ * The earlier lowercase spelling (temperature, soilTemperature, humidity,
+ * soilMoisture, gas, light, airPressure) is still accepted as an ALIAS of the
+ * same physical variable, so a node written by a not-yet-reflashed ESP32 is
+ * still read correctly.
  *
- * The repository's own names stay canonical: nothing is renamed in Firebase
- * and no value is rewritten. The alias is only used to FIND the value; the
- * field that was actually read is preserved in `rawNames` and in every
- * observation's `variable.originalName`, so a reader can always tell which
- * spelling produced the number.
+ * The alias is only used to FIND the value; the field that was actually read is
+ * preserved in `rawNames` and in every observation's `variable.originalName`,
+ * so a reader can always tell which spelling produced the number.
  *
  * Suspect readings are never silently dropped; they are labelled and passed on
  * with an explicit quality status.

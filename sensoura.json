@@ -1,25 +1,49 @@
 {
   "Sensoura": {
     "sensorData": {
-      "temperature": 28.5,
-      "soilTemperature": 22.3,
-      "humidity": 65.2,
-      "soilMoisture": 25.0,
-      "gas": 180,
-      "light": 720,
-      "airPressure": 1013.25,
+      "AirTemp": 28.5,
+      "SoilTemp": 22.3,
+      "AirHumidity": 65.2,
+      "SoilMoisture": 25,
+      "VOC": 180,
+      "Light": 720,
+      "Barometricpressure": 1013.25,
       "lastUpdate": 1792007145618
     },
     "system": {
       "status": "online",
       "lastSeen": 1792007145618,
       "deviceId": "sensoura-esp32-01",
-      "relay": { "mode": "AUTO", "state": "OFF", "reason": null, "lastAction": null },
-      "buzzer": { "muted": false },
-      "leds": { "green": false, "red": false }
+      "relay": {
+        "mode": "AUTO",
+        "state": "OFF",
+        "reason": null,
+        "lastAction": null
+      },
+      "buzzer": {
+        "muted": false
+      },
+      "leds": {
+        "green": false,
+        "red": false
+      }
     },
     "commands": {},
     "commandResults": {},
-    "aiSuggestions": {}
+    "aiSuggestions": {},
+    "aiPredictions": {
+      "3001": {
+        "type": "rainfall",
+        "predictedValue": "after 2 days afternoon",
+        "confidence": 0.85,
+        "predictionTime": 1791867600000
+      },
+      "3002": {
+        "type": "air_temp",
+        "predictedValue": 30,
+        "confidence": 0.9,
+        "predictionTime": 1791867600000
+      }
+    }
   }
 }

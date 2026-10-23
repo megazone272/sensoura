@@ -29,13 +29,13 @@ export class RealtimeService extends EventEmitter {
       if (this.mockTimer) return;
       this.currentState = {
         sensorData: {
-          temperature: 28.4 + (Math.random() - 0.5) * 2,
-          soilTemperature: 22.5 + (Math.random() - 0.5) * 1.5,
-          humidity: 65.0 + (Math.random() - 0.5) * 5,
-          soilMoisture: 24.0 + (Math.random() - 0.5) * 3,
-          gas: 185 + Math.floor((Math.random() - 0.5) * 20),
-          light: 720 + Math.floor((Math.random() - 0.5) * 100),
-          airPressure: 1013.25 + (Math.random() - 0.5) * 5,
+          AirTemp: 28.4 + (Math.random() - 0.5) * 2,
+          SoilTemp: 22.5 + (Math.random() - 0.5) * 1.5,
+          AirHumidity: 65.0 + (Math.random() - 0.5) * 5,
+          SoilMoisture: 24.0 + (Math.random() - 0.5) * 3,
+          VOC: 185 + Math.floor((Math.random() - 0.5) * 20),
+          Light: 720 + Math.floor((Math.random() - 0.5) * 100),
+          Barometricpressure: 1013.25 + (Math.random() - 0.5) * 5,
           lastUpdate: Date.now(),
         },
         system: {
@@ -57,23 +57,23 @@ export class RealtimeService extends EventEmitter {
 
   private simulateSensorUpdate() {
     const sensorData = this.currentState.sensorData!;
-    sensorData.temperature += (Math.random() - 0.5) * 0.5;
-    sensorData.soilTemperature += (Math.random() - 0.5) * 0.3;
-    sensorData.humidity += (Math.random() - 0.5) * 1;
-    sensorData.soilMoisture = Math.max(0, Math.min(100, sensorData.soilMoisture + (Math.random() - 0.5) * 0.5));
-    sensorData.gas += Math.floor((Math.random() - 0.5) * 5);
-    sensorData.light += Math.floor((Math.random() - 0.5) * 20);
-    sensorData.airPressure += (Math.random() - 0.5) * 0.2;
+    sensorData.AirTemp += (Math.random() - 0.5) * 0.5;
+    sensorData.SoilTemp += (Math.random() - 0.5) * 0.3;
+    sensorData.AirHumidity += (Math.random() - 0.5) * 1;
+    sensorData.SoilMoisture = Math.max(0, Math.min(100, sensorData.SoilMoisture + (Math.random() - 0.5) * 0.5));
+    sensorData.VOC += Math.floor((Math.random() - 0.5) * 5);
+    sensorData.Light += Math.floor((Math.random() - 0.5) * 20);
+    sensorData.Barometricpressure += (Math.random() - 0.5) * 0.2;
     sensorData.lastUpdate = Date.now();
 
     aiEngine.recordObservation(sensorData);
 
     // Auto-generate irrigation suggestion if soil moisture low
-    if (sensorData.soilMoisture < 30 && !this.hasPendingIrrigationSuggestion()) {
+    if (sensorData.SoilMoisture < 30 && !this.hasPendingIrrigationSuggestion()) {
       this.addAISuggestion({
         type: 'irrigation',
         suggestion: 'Start irrigation now',
-        reason: `Soil moisture at ${sensorData.soilMoisture.toFixed(1)}% — below 30% threshold`,
+        reason: `Soil moisture at ${sensorData.SoilMoisture.toFixed(1)}% — below 30% threshold`,
         recommendedAction: { target: 'pump', action: 'ON', mode: 'MANUAL' },
         status: 'pending',
         requiresApproval: true,
@@ -84,11 +84,11 @@ export class RealtimeService extends EventEmitter {
     }
 
     // Auto-generate gas warning
-    if (sensorData.gas > 200 && !this.hasPendingGasSuggestion()) {
+    if (sensorData.VOC > 200 && !this.hasPendingGasSuggestion()) {
       this.addAISuggestion({
         type: 'environment',
         suggestion: 'Check gas sensor readings',
-        reason: `Gas level at ${sensorData.gas} ppm — approaching warning threshold (200 ppm)`,
+        reason: `Gas level at ${sensorData.VOC} ppm — approaching warning threshold (200 ppm)`,
         recommendedAction: { target: 'gasSensor', action: 'CHECK_SENSOR', mode: null },
         status: 'pending',
         requiresApproval: true,

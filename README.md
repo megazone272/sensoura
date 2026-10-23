@@ -405,13 +405,13 @@ FIREBASE_DATABASE_URL=https://on-an-official-mission-default-rtdb.europe-west1.f
 {
   "Sensoura": {
     "sensorData": {
-      "temperature": 28.4,
-      "soilTemperature": 22.5,
-      "humidity": 65.0,
-      "soilMoisture": 24.0,
-      "gas": 185,
-      "light": 720,
-      "airPressure": 1013.25,
+      "AirTemp": 28.4,
+      "SoilTemp": 22.5,
+      "AirHumidity": 65.0,
+      "SoilMoisture": 24.0,
+      "VOC": 185,
+      "Light": 60,
+      "Barometricpressure": 1013.25,
       "lastUpdate": 1791864000000
     },
     "system": {
@@ -429,10 +429,17 @@ FIREBASE_DATABASE_URL=https://on-an-official-mission-default-rtdb.europe-west1.f
     },
     "commands": {},
     "commandResults": {},
-    "aiSuggestions": {}
+    "aiSuggestions": {},
+    "aiPredictions": {}
   }
 }
 ```
+
+The `sensorData` keys above are the database contract used by the firmware,
+this backend and the dashboard. `npm run db:push` seeds the tree as shown;
+`aiPredictions` is created only while it is missing, seeded with the two
+prediction records from `sensoura-initial-data.json`, and is never overwritten
+afterwards — not even with `--force`.
 
 ---
 
