@@ -1,168 +1,271 @@
-import { useState } from 'react';
+import { useSensorData, useSystem, useConnection, useAISuggestions, useSensorStore } from '@store/sensorStore';
 import {
-  Activity,
-  Droplets,
   Thermometer,
+  Droplets,
   Flame,
   Sun,
   Gauge,
+  Wifi,
+  Database,
+  AlertTriangle,
+  Zap,
+  Droplet,
 } from 'lucide-react';
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from 'recharts';
-import { format } from 'date-fns';
-import { useSensorData, useSystem, useConnection } from '@store/sensorStore';
+import { formatDistanceToNow } from 'date-fns';
+import { useState, useEffect } from 'react';
 
-const sensorConfig = [
-  { key: 'AirTemp', label: 'Air Temp', unit: '°C', icon: Thermometer, color: '#ef4444' },
-  { key: 'SoilTemp', label: 'Soil Temp', unit: '°C', icon: Thermometer, color: '#f97316' },
-  { key: 'AirHumidity', label: 'Humidity', unit: '%', icon: Droplets, color: '#06b6d4' },
-  { key: 'SoilMoisture', label: 'Soil Moisture', unit: '%', icon: Droplets, color: '#22c55e' },
-  { key: 'VOC', label: 'Gas (MQ135)', unit: 'ppm', icon: Flame, color: '#fbbf24' },
-  { key: 'Light', label: 'Light', unit: 'lux', icon: Sun, color: '#fde047' },
-  { key: 'Barometricpressure', label: 'Air Pressure', unit: 'hPa', icon: Gauge, color: '#a855f7' },
-] as const;
+function SensorCard({
+  label,
+  value,
+  unit,
+  icon: Icon,
+  lastUpdate,
+}: {
+  label: string;
+  value: number | null | undefined;
+  unit?: string;
+  icon: React.ComponentType<any>;
+  lastUpdate?: number;
+}) {
+  const formatted =
+    value != null && !isNaN(Number(value))
+      ? Number(value).toLocaleString(undefined, {
+          minimumFractionDigits: unit === 'hPa' ? 1 : 1,
+          maximumFractionDigits: unit === 'hPa' ? 1 : 1,
+        })
+      : '—';
+
+  const lastText = lastUpdate ? formatDistanceToNow(lastUpdate, { addSuffix: true }) : null;
+
+  return (
+    <div className="relative overflow-hidden rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)] p-4 hover:border-[var(--border-secondary)] transition-all duration-200">
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <div className="w-9 h-9 rounded-lg bg-[var(--accent-primary)]/10 flex items-center justify-center">
+            <Icon className="w-4 h-4 text-[var(--accent-primary)]" />
+          </div>
+          <div>
+            <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider">{label}</p>
+          </div>
+        </div>
+      </div>
+      <div className="flex items-baseline gap-1.5">
+        <span className="text-2xl font-bold text-[var(--text-primary)] tabular-nums">{formatted}</span>
+        {unit && <span className="text-sm text-[var(--text-muted)]">{unit}</span>}
+      </div>
+      {lastText && (
+        <p className="text-xs text-[var(--text-muted)] mt-2">Updated {lastText}</p>
+      )}
+    </div>
+  );
+}
 
 export function Sensors() {
   const sensorData = useSensorData();
   const system = useSystem();
   const { connected } = useConnection();
-  const [selectedSensor, setSelectedSensor] = useState<string>(sensorConfig[0].key);
+  useAISuggestions();
+  const { sendCommand } = useSensorStore();
+  const [, setHistory] = useState<Record<string, number[]>>({});
 
-  // Mock historical data generation for the chart
-  const generateHistory = (current: number) => {
-    if (!current) return [];
-    const points = 50;
-    const data = [];
-    for (let i = points - 1; i >= 0; i--) {
-      const noise = (Math.random() - 0.5) * (current * 0.05);
-      data.push({
-        time: format(new Date(Date.now() - i * 300000), 'HH:mm'),
-        value: Math.max(0, current + noise + (i * current * 0.002)),
+  useEffect(() => {
+    if (!sensorData) return;
+    setHistory((prev) => {
+      const next = { ...prev };
+      Object.entries(sensorData).forEach(([key, value]) => {
+        if (typeof value === 'number') {
+          next[key] = next[key] || [];
+          next[key].push(value);
+          if (next[key].length > 50) next[key].shift();
+        }
       });
-    }
-    return data;
-  };
-
-  const currentValue = sensorData?.[selectedSensor as keyof typeof sensorData] as number;
-  const chartData = generateHistory(currentValue);
+      return next;
+    });
+  }, [sensorData]);
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Sensors Monitor</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Sensor Readings</h1>
           <p className="text-[var(--text-muted)] mt-1">
-            {system?.deviceId} • {connected ? 'LIVE' : 'OFFLINE'}
+            Live telemetry from {system?.deviceId ?? 'the deployed device'}
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <span className={`status-dot ${connected ? 'online' : 'offline'}`} />
-          <span className="font-medium">
-            {sensorData?.lastUpdate
-              ? `Updated ${format(new Date(sensorData.lastUpdate), 'HH:mm:ss')}`
-              : 'No data'}
-          </span>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[var(--bg-tertiary)] border border-[var(--border-primary)]">
+            <span className={`status-dot ${connected ? 'online' : 'offline'}`} />
+            <span className="text-sm font-medium">{connected ? 'LIVE' : 'OFFLINE'}</span>
+          </div>
+          <button
+            className="btn btn-secondary"
+            onClick={() => sendCommand({ target: 'system', action: 'REBOOT', mode: 'MANUAL' })}
+          >
+            <Wifi className="w-4 h-4" />
+            Reboot
+          </button>
         </div>
       </div>
 
-      {/* Sensor Tabs */}
-      <div className="flex flex-wrap gap-2">
-        {sensorConfig.map(sensor => {
-          const Icon = sensor.icon;
-          const value = sensorData?.[sensor.key as keyof typeof sensorData] as number;
-          return (
-            <button
-              key={sensor.key}
-              className={`btn btn-sm ${selectedSensor === sensor.key ? 'btn-primary' : 'btn-secondary'}`}
-              onClick={() => setSelectedSensor(sensor.key)}
-            >
-              <Icon className="w-4 h-4" style={{ color: selectedSensor === sensor.key ? 'inherit' : sensor.color }} />
-              {sensor.label}
-              {value !== undefined && (
-                <span className="font-mono ml-2 opacity-70">
-                  {typeof value === 'number' ? value.toFixed(1) : value}
-                  {sensor.unit}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Selected Sensor Chart */}
-      <div className="card">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold flex items-center gap-2">
-            <Activity className="w-5 h-5" style={{ color: 'var(--accent-primary)' }} />
-            {sensorConfig.find(s => s.key === selectedSensor)?.label} History
-          </h3>
-          <span className="text-sm text-[var(--text-muted)]">Last 4 hours</span>
+      {/* Environment */}
+      <section>
+        <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+          <Thermometer className="w-5 h-5 text-[var(--accent-primary)]" />
+          Environment
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+          <SensorCard
+            label="Air Temperature"
+            value={sensorData?.AirTemp}
+            unit="°C"
+            icon={Thermometer}
+            lastUpdate={sensorData?.lastUpdate}
+          />
+          <SensorCard
+            label="Soil Temperature"
+            value={sensorData?.SoilTemp}
+            unit="°C"
+            icon={Thermometer}
+            lastUpdate={sensorData?.lastUpdate}
+          />
+          <SensorCard
+            label="Humidity"
+            value={sensorData?.AirHumidity}
+            unit="%"
+            icon={Droplets}
+            lastUpdate={sensorData?.lastUpdate}
+          />
+          <SensorCard
+            label="Light"
+            value={sensorData?.Light}
+            unit="lux"
+            icon={Sun}
+            lastUpdate={sensorData?.lastUpdate}
+          />
+          <SensorCard
+            label="Air Pressure"
+            value={sensorData?.Barometricpressure}
+            unit="hPa"
+            icon={Gauge}
+            lastUpdate={sensorData?.lastUpdate}
+          />
         </div>
-        <div className="h-80">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData}>
-              <defs>
-                <linearGradient id="lineGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={sensorConfig.find(s => s.key === selectedSensor)?.color} stopOpacity={0.3} />
-                  <stop offset="95%" stopColor={sensorConfig.find(s => s.key === selectedSensor)?.color} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-primary)" />
-              <XAxis dataKey="time" stroke="var(--text-muted)" fontSize={12} />
-              <YAxis stroke="var(--text-muted)" fontSize={12} />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: 'var(--bg-tertiary)',
-                  border: '1px solid var(--border-primary)',
-                  borderRadius: '8px',
-                }}
-              />
-              <Line
-                type="monotone"
-                dataKey="value"
-                stroke={sensorConfig.find(s => s.key === selectedSensor)?.color}
-                strokeWidth={2}
-                dot={false}
-                fill="url(#lineGradient)"
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
+      </section>
 
-      {/* All Sensor Cards */}
-      <div className="grid grid-2 md:grid-cols-4 gap-4">
-        {sensorConfig.map(sensor => {
-          const Icon = sensor.icon;
-          const value = sensorData?.[sensor.key as keyof typeof sensorData] as number;
-          return (
-            <div
-              key={sensor.key}
-              className={`card glass-hover cursor-pointer ${selectedSensor === sensor.key ? 'border-[var(--accent-primary)]' : ''}`}
-              onClick={() => setSelectedSensor(sensor.key)}
-            >
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-xl bg-[var(--bg-tertiary)] flex items-center justify-center">
-                  <Icon className="w-5 h-5" style={{ color: sensor.color }} />
-                </div>
+      {/* Soil & Air Quality */}
+      <section>
+        <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+          <Droplet className="w-5 h-5 text-[var(--accent-primary)]" />
+          Soil & Air Quality
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <SensorCard
+            label="Soil Moisture"
+            value={sensorData?.SoilMoisture}
+            unit="%"
+            icon={Droplet}
+            lastUpdate={sensorData?.lastUpdate}
+          />
+          <SensorCard
+            label="Gas (VOC)"
+            value={sensorData?.VOC}
+            unit="VOC Index"
+            icon={Flame}
+            lastUpdate={sensorData?.lastUpdate}
+          />
+        </div>
+      </section>
+
+      {/* Alerts & System */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 card">
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5 text-[var(--accent-warning)]" />
+            Alerts & System Status
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="rounded-xl bg-[var(--accent-warning)]/10 border border-[var(--accent-warning)]/30 p-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-[var(--accent-warning)] shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-sm text-[var(--text-muted)]">{sensor.label}</p>
-                  <p className="text-2xl font-bold font-mono" style={{ color: sensor.color }}>
-                    {typeof value === 'number' ? value.toFixed(sensor.key === 'Barometricpressure' ? 2 : 1) : '--'}
+                  <p className="font-semibold text-[var(--text-primary)]">Sensor Alert</p>
+                  <p className="text-sm text-[var(--text-muted)] mt-1">
+                    {system?.status === 'offline'
+                      ? 'Device is offline — check power and connectivity.'
+                      : system?.status === 'error'
+                      ? 'Device reported an error — check sensor wiring and firmware logs.'
+                      : 'All sensors reporting within normal ranges.'}
+                  </p>
+                  <p className="text-xs text-[var(--text-muted)] mt-2">
+                    Last seen: {system?.lastSeen ? formatDistanceToNow(system.lastSeen, { addSuffix: true }) : '—'}
                   </p>
                 </div>
               </div>
-              <p className="text-xs text-[var(--text-muted)]">Unit: {sensor.unit}</p>
             </div>
-          );
-        })}
+
+            <div className="rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border-primary)] p-4">
+              <h3 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">System Info</h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-[var(--text-muted)]">Device ID</span>
+                  <span className="font-mono text-[var(--text-primary)]">{system?.deviceId ?? '—'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[var(--text-muted)]">Status</span>
+                  <span className="font-medium capitalize text-[var(--text-primary)]">{system?.status ?? '—'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[var(--text-muted)]">Pump/Relay</span>
+                  <span className="font-mono text-[var(--text-primary)]">
+                    {system?.relay?.state ?? 'OFF'} • {system?.relay?.mode ?? 'AUTO'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[var(--text-muted)]">Buzzer</span>
+                  <span className="text-[var(--text-primary)]">{system?.buzzer?.muted ? 'Muted' : 'Active'}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="card">
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <Zap className="w-5 h-5 text-[var(--accent-primary)]" />
+            Quick Actions
+          </h2>
+          <div className="space-y-2">
+            <button
+              className="btn btn-primary w-full justify-center"
+              onClick={() => sendCommand({ target: 'pump', action: 'ON', mode: 'MANUAL' })}
+            >
+              <Droplets className="w-4 h-4" />
+              Irrigate Now
+            </button>
+            <button
+              className="btn btn-secondary w-full justify-center"
+              onClick={() => sendCommand({ target: 'pump', action: 'OFF', mode: 'MANUAL' })}
+            >
+              <AlertTriangle className="w-4 h-4" />
+              Emergency Stop
+            </button>
+            <button
+              className="btn btn-secondary w-full justify-center"
+              onClick={() => sendCommand({ target: 'buzzer', action: 'MUTE', mode: 'MANUAL' })}
+            >
+              <Zap className="w-4 h-4" />
+              Mute Buzzer
+            </button>
+            <button
+              className="btn btn-secondary w-full justify-center"
+              onClick={() => sendCommand({ target: 'system', action: 'CALIBRATE', mode: 'MANUAL' })}
+            >
+              <Database className="w-4 h-4" />
+              Calibrate Sensors
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
