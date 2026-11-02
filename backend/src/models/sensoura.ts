@@ -21,7 +21,7 @@ export interface SystemStatus {
 export interface RelayState {
   mode: 'AUTO' | 'MANUAL';
   state: 'ON' | 'OFF';
-  reason: 'soil_dry' | 'scheduled' | 'manual' | 'ai_predicted' | 'emergency' | 'threshold_met';
+  reason: 'boot' | 'soil_dry' | 'scheduled' | 'manual' | 'ai_predicted' | 'emergency' | 'threshold_met' | 'network-failsafe';
   lastAction: number;
 }
 
@@ -40,6 +40,7 @@ export interface Command {
   mode: 'MANUAL' | 'AUTO';
   timestamp: number;
   id?: string;
+  deviceId?: string;
 }
 
 export interface CommandResult {
@@ -92,6 +93,8 @@ export const sensorDataSchema = z.object({
   lastUpdate: z.number(),
 });
 
+export const authenticateTelemetry = sensorDataSchema.strict();
+
 export const systemStatusSchema = z.object({
   status: z.enum(['online', 'offline', 'error']),
   lastSeen: z.number(),
@@ -99,12 +102,29 @@ export const systemStatusSchema = z.object({
   relay: z.object({
     mode: z.enum(['AUTO', 'MANUAL']),
     state: z.enum(['ON', 'OFF']),
-    reason: z.enum(['soil_dry', 'scheduled', 'manual', 'ai_predicted', 'emergency', 'threshold_met']),
+    reason: z.enum(['boot', 'soil_dry', 'scheduled', 'manual', 'ai_predicted', 'emergency', 'threshold_met', 'network-failsafe']),
     lastAction: z.number(),
   }),
   buzzer: z.object({ muted: z.boolean() }),
   leds: z.object({ green: z.boolean(), red: z.boolean() }),
 });
+
+export const deviceTelemetrySchema = z.object({
+  sensorData: authenticateTelemetry,
+  system: z.object({
+    status: z.enum(['online', 'offline', 'error']),
+    lastSeen: z.number().int().nonnegative(),
+    deviceId: z.string().min(1).max(128),
+    relay: z.object({
+      mode: z.enum(['AUTO', 'MANUAL']),
+      state: z.enum(['ON', 'OFF']),
+      reason: z.enum(['boot', 'soil_dry', 'scheduled', 'manual', 'ai_predicted', 'emergency', 'threshold_met', 'network-failsafe']),
+      lastAction: z.number().int().nonnegative(),
+    }).strict(),
+    buzzer: z.object({ muted: z.boolean() }).strict(),
+    leds: z.object({ green: z.boolean(), red: z.boolean() }).strict(),
+  }).strict(),
+}).strict();
 
 export const commandSchema = z.object({
   target: z.enum(['pump', 'buzzer', 'led', 'system']),

@@ -1,6 +1,6 @@
-import { getDatabase, isFirebaseEnabled, getRestClient } from './firebase.js';
+import { getDatabase, isFirebaseEnabled } from './firebase.js';
 import { getLogger } from '../utils/logger.js';
-import type { SensorData, SystemStatus, Command, CommandResult, AISuggestion, SensouraState } from '../models/sensoura.js';
+import type { SensorData, SystemStatus, Command, CommandResult, AISuggestion, SensouraState, RelayState, BuzzerState } from '../models/sensoura.js';
 import { aiEngine } from '../ai/engine.js';
 import { EventEmitter } from 'events';
 
@@ -8,15 +8,60 @@ const logger = getLogger('realtime');
 
 type StateListener = (state: Partial<SensouraState>) => void;
 
+export type TelemetryPayload = {
+  sensorData: SensorData;
+  timestamp?: number;
+  system?: SystemStatus;
+};
+
+export type CommandFeedback = {
+  commandId: string;
+  status: 'sent' | 'acked' | 'failed';
+  timestamp: number;
+};
+
+function defaultSystem(): SystemStatus {
+  return {
+    status: 'online',
+    lastSeen: Date.now(),
+    deviceId: 'sensoura-esp32-01',
+    relay: { mode: 'MANUAL', state: 'OFF', reason: 'manual', lastAction: Date.now() },
+    buzzer: { muted: false },
+    leds: { green: false, red: false },
+  };
+}
+
+function safeCommandTarget(value: unknown): Command['target'] {
+  return (value === 'pump' || value === 'buzzer' || value === 'led' || value === 'system') ? value : 'system';
+}
+
+function safeCommandAction(value: unknown): Command['action'] {
+  return (value === 'ON' || value === 'OFF' || value === 'MUTE' || value === 'UNMUTE' || value === 'REBOOT' || value === 'CALIBRATE') ? value : 'ON';
+}
+
+function safeCommandMode(value: unknown): Command['mode'] {
+  return (value === 'AUTO' || value === 'MANUAL') ? value : 'MANUAL';
+}
+
+function isSupportedCommand(target: string, action: string): target is Command['target'] {
+  if (target === 'pump') return action === 'ON' || action === 'OFF';
+  if (target === 'buzzer') return action === 'ON' || action === 'OFF' || action === 'MUTE' || action === 'UNMUTE';
+  if (target === 'led') return action === 'ON' || action === 'OFF';
+  if (target === 'system') return action === 'REBOOT' || action === 'CALIBRATE';
+  return false;
+}
+
 export class RealtimeService extends EventEmitter {
   private stateListeners: Map<string, StateListener[]> = new Map();
   private currentState: Partial<SensouraState> = {};
   private unsubscribers: (() => void)[] = [];
   private isListening = false;
-  private restMode = false;
   private sdkDataReceived = false;
-  private pollTimer: ReturnType<typeof setInterval> | null = null;
   private mockTimer: ReturnType<typeof setInterval> | null = null;
+  private telemetryEmitter: ((payload: TelemetryPayload) => void) | null = null;
+  private commandFeedbackEmitter: ((feedback: CommandFeedback) => void) | null = null;
+  private suggestionActionsInProgress = new Set<string>();
+  private commandResultsInProgress = new Set<string>();
 
   constructor() {
     super();
@@ -38,14 +83,7 @@ export class RealtimeService extends EventEmitter {
           Barometricpressure: 1013.25 + (Math.random() - 0.5) * 5,
           lastUpdate: Date.now(),
         },
-        system: {
-          status: 'online',
-          lastSeen: Date.now(),
-          deviceId: 'sensoura-esp32-01',
-          relay: { mode: 'AUTO', state: 'ON', reason: 'soil_dry', lastAction: Date.now() },
-          buzzer: { muted: false },
-          leds: { green: false, red: true },
-        },
+        system: defaultSystem(),
         commands: {},
         commandResults: {},
         aiSuggestions: {},
@@ -114,6 +152,7 @@ export class RealtimeService extends EventEmitter {
   async startListening(): Promise<void> {
     if (this.isListening) return;
     this.isListening = true;
+    this.sdkDataReceived = false;
 
     if (isFirebaseEnabled()) {
       const db = getDatabase();
@@ -134,18 +173,6 @@ export class RealtimeService extends EventEmitter {
         this.unsubscribers.push(() => ref.off('value', unsub));
       }
       logger.info('Firebase real-time listeners attached');
-
-      // Health probe: some networks reject the SDK's persistent websocket
-      // channel. If nothing arrives within 12s, fall back to REST polling
-      // with the same service-account credentials (verified working).
-      setTimeout(() => {
-        if (!this.sdkDataReceived && this.isListening && getRestClient()) {
-          this.restMode = true;
-          logger.warn('Firebase SDK realtime channel silent — switching to REST polling fallback (5s)');
-          void this.pollRest();
-          this.pollTimer = setInterval(() => void this.pollRest(), 5000);
-        }
-      }, 12_000);
     } else {
       logger.info('Running in LOCAL MODE — using mock real-time updates');
       this.setupMockData();
@@ -154,71 +181,19 @@ export class RealtimeService extends EventEmitter {
     this.emit('ready');
   }
 
-  /** One REST poll of /Sensoura — used when the SDK channel is unavailable. */
-  private async pollRest(): Promise<void> {
-    const rest = getRestClient();
-    if (!rest) return;
-    try {
-      const data = await rest.get<Partial<SensouraState>>('/Sensoura');
-      if (!data) return;
-      for (const key of ['sensorData', 'system', 'commands', 'commandResults', 'aiSuggestions'] as const) {
-        if (data[key] !== undefined) {
-          this.currentState[key] = data[key] as never;
-          if (key === 'sensorData' && data.sensorData) {
-            aiEngine.recordObservation(data.sensorData);
-          }
-          this.notify(key, data[key]);
-        }
-      }
-    } catch (error) {
-      logger.warn({ err: (error as Error).message }, 'Firebase REST poll failed');
-    }
-  }
-
-  /**
-   * Write to Firebase using the SDK channel, racing a 5s timeout; on
-   * failure it permanently switches to the REST transport and retries once.
-   */
+  /** Write using the authenticated Firebase Admin SDK; never downgrade transport. */
   private async writeFirebase(path: string, value: unknown, merge = false): Promise<void> {
-    const rest = getRestClient();
-
-    const writeRest = async () => {
-      if (!rest) return;
-      if (merge) await rest.update(path, value as Record<string, unknown>);
-      else await rest.put(path, value);
-    };
-
-    if (this.restMode) {
-      await writeRest();
-      return;
-    }
-
     const db = getDatabase();
-    if (!db) return;
+    if (!isFirebaseEnabled() || !db) throw new Error('Firebase Admin Database is unavailable');
 
     const ref = db.ref(path);
-    const write = merge ? ref.update(value as Record<string, unknown>) : ref.set(value);
-    (write as Promise<unknown>).catch(() => undefined); // avoid unhandled rejection on the loser
-    const timeout = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('SDK write timed out after 5s')), 5000)
-    );
-
-    try {
-      await Promise.race([write, timeout]);
-    } catch (error) {
-      logger.warn({ path, err: (error as Error).message }, 'SDK write failed — switching to REST transport');
-      this.restMode = true;
-      await writeRest();
-    }
+    if (merge) await ref.update(value as Record<string, unknown>);
+    else await ref.set(value);
   }
 
   stopListening(): void {
     this.unsubscribers.forEach(unsub => unsub());
     this.unsubscribers = [];
-    if (this.pollTimer) {
-      clearInterval(this.pollTimer);
-      this.pollTimer = null;
-    }
     if (this.mockTimer) {
       clearInterval(this.mockTimer);
       this.mockTimer = null;
@@ -227,9 +202,8 @@ export class RealtimeService extends EventEmitter {
     logger.info('Real-time listeners stopped');
   }
 
-  /** True when live data is flowing over the REST fallback transport. */
-  isUsingRestFallback(): boolean {
-    return this.restMode;
+  isRealtimeReady(): boolean {
+    return !isFirebaseEnabled() || (this.isListening && this.sdkDataReceived);
   }
 
   // State access
@@ -260,54 +234,119 @@ export class RealtimeService extends EventEmitter {
   // Mutations
   async sendCommand(command: Omit<Command, 'id' | 'timestamp'>): Promise<string> {
     const id = `cmd_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const fullCommand: Command = { ...command, id, timestamp: Date.now() };
+    const deviceId = command.deviceId ?? process.env.DEVICE_ID ?? this.currentState.system?.deviceId ?? defaultSystem().deviceId;
+    const fullCommand: Command = { ...command, deviceId, id, timestamp: Date.now() };
+    this.currentState.commands = { ...this.currentState.commands, [id]: fullCommand };
+    this.notify('commands', this.currentState.commands);
 
     if (isFirebaseEnabled()) {
-      await this.writeFirebase(`/Sensoura/commands/${id}`, fullCommand);
-    } else {
-      this.currentState.commands = { ...this.currentState.commands, [id]: fullCommand };
-      this.notify('commands', this.currentState.commands);
+      try {
+        await this.writeFirebase(`/Sensoura/commands/${id}`, fullCommand);
+      } catch (error) {
+        const commands = { ...this.currentState.commands };
+        delete commands[id];
+        this.currentState.commands = commands;
+        this.notify('commands', commands);
+        throw error;
+      }
     }
 
-    logger.info({ commandId: id, ...command }, 'Command sent');
+    logger.info({ commandId: id, target: command.target, action: command.action, mode: command.mode }, 'Command sent');
+
+    const feedback: CommandFeedback = { commandId: id, status: 'sent', timestamp: Date.now() };
+    this.emitCommandFeedback(feedback);
+
     return id;
+  }
+
+  async recordCommandResult(commandId: string, result: CommandResult): Promise<void> {
+    if (this.currentState.commandResults?.[commandId] || this.commandResultsInProgress.has(commandId)) {
+      throw new Error('Command result already reported');
+    }
+    this.commandResultsInProgress.add(commandId);
+    try {
+      if (isFirebaseEnabled()) await this.writeFirebase(`/Sensoura/commandResults/${commandId}`, result);
+      this.currentState.commandResults = { ...this.currentState.commandResults, [commandId]: result };
+      this.notify('commandResults', this.currentState.commandResults);
+    } finally {
+      this.commandResultsInProgress.delete(commandId);
+    }
   }
 
   async approveSuggestion(suggestionId: string): Promise<void> {
     const suggestions = this.currentState.aiSuggestions ?? {};
     const suggestion = suggestions[suggestionId];
     if (!suggestion) throw new Error('Suggestion not found');
+    if (suggestion.status !== 'pending') throw new Error(`Suggestion is already ${suggestion.status}`);
+    if (this.suggestionActionsInProgress.has(suggestionId)) throw new Error('Suggestion action is already in progress');
 
-    suggestion.status = 'approved';
-    suggestion.requiresApproval = false;
-
-    // Auto-execute if it's a command
-    if (suggestion.recommendedAction.target && suggestion.recommendedAction.action) {
-      await this.sendCommand({
-        target: suggestion.recommendedAction.target as any,
-        action: suggestion.recommendedAction.action as any,
-        mode: suggestion.recommendedAction.mode ?? 'MANUAL',
-      });
-      suggestion.status = 'executed';
+    if (suggestion.expiresAt <= Date.now()) {
+      suggestion.status = 'expired';
+      suggestion.requiresApproval = false;
+      if (isFirebaseEnabled()) {
+        await this.writeFirebase(`/Sensoura/aiSuggestions/${suggestionId}`, suggestion, true);
+      } else {
+        this.notify('aiSuggestions', suggestions);
+      }
+      throw new Error('Suggestion has expired');
     }
 
-    if (isFirebaseEnabled()) {
-      await this.writeFirebase(`/Sensoura/aiSuggestions/${suggestionId}`, suggestion, true);
-    } else {
-      this.notify('aiSuggestions', this.currentState.aiSuggestions);
+    this.suggestionActionsInProgress.add(suggestionId);
+    try {
+      const { target, action, mode } = suggestion.recommendedAction;
+      if (target && action && isSupportedCommand(target, action)) {
+        await this.sendCommand({
+          target: safeCommandTarget(target),
+          action: safeCommandAction(action),
+          mode: safeCommandMode(mode),
+        });
+        suggestion.status = 'executed';
+      } else {
+        // Unsupported recommendations are acknowledged as advice; never coerce
+        // them into a different actuator command.
+        suggestion.status = 'approved';
+      }
+      suggestion.requiresApproval = false;
+
+      if (isFirebaseEnabled()) {
+        await this.writeFirebase(`/Sensoura/aiSuggestions/${suggestionId}`, suggestion, true);
+      } else {
+        this.notify('aiSuggestions', suggestions);
+      }
+    } finally {
+      this.suggestionActionsInProgress.delete(suggestionId);
     }
   }
 
   async rejectSuggestion(suggestionId: string): Promise<void> {
     const suggestions = this.currentState.aiSuggestions ?? {};
-    if (!suggestions[suggestionId]) throw new Error('Suggestion not found');
+    const suggestion = suggestions[suggestionId];
+    if (!suggestion) throw new Error('Suggestion not found');
+    if (suggestion.status !== 'pending') throw new Error(`Suggestion is already ${suggestion.status}`);
+    if (this.suggestionActionsInProgress.has(suggestionId)) throw new Error('Suggestion action is already in progress');
 
-    suggestions[suggestionId].status = 'rejected';
+    this.suggestionActionsInProgress.add(suggestionId);
+    try {
+      if (suggestion.expiresAt <= Date.now()) {
+        suggestion.status = 'expired';
+        suggestion.requiresApproval = false;
+        if (isFirebaseEnabled()) {
+          await this.writeFirebase(`/Sensoura/aiSuggestions/${suggestionId}`, suggestion, true);
+        } else {
+          this.notify('aiSuggestions', suggestions);
+        }
+        throw new Error('Suggestion has expired');
+      }
 
-    if (isFirebaseEnabled()) {
-      await this.writeFirebase(`/Sensoura/aiSuggestions/${suggestionId}`, { status: 'rejected' }, true);
-    } else {
-      this.notify('aiSuggestions', suggestions);
+      suggestion.status = 'rejected';
+      suggestion.requiresApproval = false;
+      if (isFirebaseEnabled()) {
+        await this.writeFirebase(`/Sensoura/aiSuggestions/${suggestionId}`, suggestion, true);
+      } else {
+        this.notify('aiSuggestions', suggestions);
+      }
+    } finally {
+      this.suggestionActionsInProgress.delete(suggestionId);
     }
   }
 
@@ -344,6 +383,119 @@ export class RealtimeService extends EventEmitter {
     this.stateListeners.get(key)?.forEach(l => l({ [key]: data }));
     this.emit(key, data);
     this.emit('update', { [key]: data });
+  }
+
+  // Socket.IO bridge hooks used by the socket module.
+  // These are intentionally narrow wrappers around the real-time service
+  // so the socket layer does not reach into internal state.
+
+  handleTelemetry(_authContext: any, payload: TelemetryPayload): void {
+    if (!payload?.sensorData) return;
+    this.currentState.sensorData = payload.sensorData;
+    const existingSystem = this.currentState.system as SystemStatus | undefined;
+    if (payload.system) {
+      this.currentState.system = payload.system;
+    } else if (existingSystem) {
+      this.currentState.system = { ...existingSystem, lastSeen: Date.now() };
+    } else {
+      this.currentState.system = defaultSystem();
+    }
+    this.notify('sensorData', payload.sensorData);
+    if (payload.system) this.notify('system', payload.system);
+    aiEngine.recordObservation(payload.sensorData);
+    this.emitTelemetry(payload);
+  }
+
+  async handleDeviceTelemetry(
+    authContext: { authMethod?: string; isDevice?: boolean; deviceId?: string } | undefined,
+    payload: { sensorData: SensorData; system: SystemStatus },
+  ): Promise<void> {
+    if (authContext?.authMethod !== 'device-bearer' || !authContext.isDevice || authContext.deviceId !== payload.system.deviceId) {
+      throw new Error('Device identity mismatch');
+    }
+    if (isFirebaseEnabled()) {
+      await Promise.all([
+        this.writeFirebase('/Sensoura/sensorData', payload.sensorData),
+        this.writeFirebase('/Sensoura/system', payload.system),
+      ]);
+    }
+    this.currentState.sensorData = payload.sensorData;
+    this.currentState.system = payload.system;
+    this.notify('sensorData', payload.sensorData);
+    this.notify('system', payload.system);
+    aiEngine.recordObservation(payload.sensorData);
+    this.emitTelemetry({ sensorData: payload.sensorData, system: payload.system, timestamp: payload.sensorData.lastUpdate });
+  }
+
+  handleCommand(_authContext: any, payload: { target?: string; action?: string; mode?: string }): void {
+    const target = payload?.target;
+    const action = payload?.action;
+    if (!target || !action) return;
+    void this.sendCommand({
+      target: safeCommandTarget(target),
+      action: safeCommandAction(action),
+      mode: safeCommandMode(payload?.mode),
+    });
+  }
+
+  handleRelayUpdate(_authContext: any, payload: { mode?: string; state?: string; reason?: string }): void {
+    const currentRelay = (this.currentState.system as SystemStatus | undefined)?.relay;
+    const updated: RelayState = {
+      mode: payload?.mode ? (payload.mode as RelayState['mode']) : (currentRelay?.mode ?? 'MANUAL'),
+      state: payload?.state ? (payload.state as RelayState['state']) : (currentRelay?.state ?? 'OFF'),
+      reason: payload?.reason ? (payload.reason as RelayState['reason']) : (currentRelay?.reason ?? 'manual'),
+      lastAction: Date.now(),
+    };
+    const nextSystem: SystemStatus = (this.currentState.system as SystemStatus | undefined)
+      ? { ...this.currentState.system as SystemStatus, relay: updated }
+      : { ...defaultSystem(), relay: updated };
+    this.currentState.system = nextSystem;
+    this.notify('system', this.currentState.system);
+  }
+
+  handleBuzzer(_authContext: any, payload: { muted?: boolean; duration?: number }): void {
+    const buzzer: BuzzerState = { muted: payload?.muted ?? false };
+    const nextSystem: SystemStatus = (this.currentState.system as SystemStatus | undefined)
+      ? { ...this.currentState.system as SystemStatus, buzzer }
+      : { ...defaultSystem(), buzzer };
+    this.currentState.system = nextSystem;
+    this.notify('system', this.currentState.system);
+  }
+
+  handleSuggestionAction(authContext: any, payload: { suggestionId: string }, action: 'approved' | 'rejected'): void {
+    if (action === 'approved') {
+      void this.approveSuggestion(payload.suggestionId);
+    } else {
+      void this.rejectSuggestion(payload.suggestionId);
+    }
+    logger.info({ userId: authContext?.userId, suggestionId: payload.suggestionId, action }, 'Suggestion action received via Socket.IO');
+  }
+
+  handleSystemAction(authContext: any, _payload: any, action: 'reboot' | 'calibrate'): void {
+    logger.info({ userId: authContext?.userId, action }, 'System action received via Socket.IO');
+    const existingSystem = this.currentState.system as SystemStatus | undefined;
+    if (existingSystem) {
+      this.currentState.system = { ...existingSystem, status: 'online', lastSeen: Date.now() };
+      this.notify('system', this.currentState.system);
+    }
+  }
+
+  onTelemetryUpdate(handler: (payload: TelemetryPayload) => void): () => void {
+    this.telemetryEmitter = handler;
+    return () => { this.telemetryEmitter = null; };
+  }
+
+  private emitTelemetry(payload: TelemetryPayload): void {
+    this.telemetryEmitter?.(payload);
+  }
+
+  onCommandFeedback(handler: (feedback: CommandFeedback) => void): () => void {
+    this.commandFeedbackEmitter = handler;
+    return () => { this.commandFeedbackEmitter = null; };
+  }
+
+  private emitCommandFeedback(feedback: CommandFeedback): void {
+    this.commandFeedbackEmitter?.(feedback);
   }
 
   // MQTT Bridge for ESP32

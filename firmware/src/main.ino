@@ -3,15 +3,11 @@
  * NASA Competition — TEAM-MISSION-49
  *
  * Reads 7 sensor values (DHT11 air temp+humidity, DS18B20 soil temperature,
- * soil moisture, MQ135 gas, photoresistor light, BMP180 pressure), streams
- * them to Firebase Realtime Database over HTTPS REST, and executes commands
- * (water pump relay, buzzer, reboot, calibrate) written to the same DB.
- *
- * Firebase rules note: the RTDB root is locked and /testData is open.
- * The device tries /Sensoura first; on PERMISSION_DENIED it automatically
- * falls back to /testData, where the backend mirrors incoming telemetry.
- * Optionally set FIREBASE_WEB_API_KEY to sign in anonymously and get a token
- * (requires Anonymous Auth enabled in the Firebase console — it is).
+ * soil moisture, MQ135 gas, photoresistor light, BMP180 pressure), sends them
+ * to the authenticated backend HTTPS API, and polls device-scoped commands.
+ * Firebase service credentials and Realtime Database access remain server-side.
+ * TLS certificate verification is mandatory; configure secrets.h with the
+ * backend origin and trusted root CA before provisioning a device.
  *
  * Platform: PlatformIO (espressif32, arduino), board esp32-s3-devkitc-1 N16R8.
  */
@@ -24,20 +20,22 @@
 #include <DallasTemperature.h>
 #include <Adafruit_BMP085.h>
 #include <ArduinoJson.h>
+#include <string.h>
+#include <time.h>
+#include "secrets.h"
 
 // ======================= CONFIGURATION =======================
-static const char* WIFI_SSID     = "YOUR_WIFI_SSID";
-static const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
-
-static const char* FIREBASE_HOST = "on-an-official-team-default-rtdb.europe-west1.firebasedatabase.app";
-// Optional: Firebase Web API key (Console > Project settings > General > Web API key)
-// Enables anonymous auth so the device can write to paths requiring auth.
-static const char* FIREBASE_WEB_API_KEY = "";
-static const char* DEVICE_ID = "sensoura-esp32-01";
+static const char* WIFI_SSID = SENSOURA_WIFI_SSID;
+static const char* WIFI_PASSWORD = SENSOURA_WIFI_PASSWORD;
+static const char* API_BASE_URL = SENSOURA_API_BASE_URL;
+static const char* DEVICE_ID = SENSOURA_DEVICE_ID;
+static const char* DEVICE_AUTH_TOKEN = SENSOURA_DEVICE_AUTH_TOKEN;
+static const char* API_ROOT_CA_PEM = SENSOURA_ROOT_CA_PEM;
 
 static const uint32_t TELEMETRY_INTERVAL_MS = 5000;   // push sensor data every 5 s
 static const uint32_t COMMAND_POLL_MS       = 3000;   // poll for commands every 3 s
 static const uint32_t WIFI_RETRY_MS         = 10000;
+static const uint32_t BACKEND_FAILSAFE_MS   = 60000;  // force pump OFF without an authenticated API response
 
 // ======================= PIN MAP (ESP32-S3) ==================
 #define PIN_DHT11        4
@@ -59,9 +57,8 @@ DallasTemperature ds18b20(&oneWire);
 Adafruit_BMP085 bmp;   // BMP180 compatible
 
 // Forward declaration (used by executeCommand before its definition)
-void pushResult(const String& id, const char* target, const char* action,
-                const char* status, const char* message, const char* actualState,
-                uint32_t ts);
+bool pushResult(const String& id, const char* target, const char* action,
+                const char* status, const char* message, const char* actualState);
 
 // ======================= STATE ==============================
 struct SensorReadings {
@@ -80,14 +77,10 @@ bool buzzerMuted = false;
 bool relayAutoMode = true;
 const char* relayReason = "boot";
 
-String firebaseBase = String("https://") + FIREBASE_HOST;
-String idToken;               // anonymous auth token (empty when unused)
-String activePath = "/Sensoura";   // switches to /testData on PERMISSION_DENIED
 uint32_t lastTelemetry = 0;
 uint32_t lastCommandPoll = 0;
 uint32_t lastWifiRetry = 0;
-uint32_t lastCommandTs = 0;         // newest executed command timestamp
-bool permissionDenied = false;
+uint32_t lastBackendSuccess = 0;
 
 // ======================= HELPERS ============================
 void setLeds(bool green, bool red) {
@@ -132,64 +125,63 @@ void ensureWifi() {
   }
 }
 
-/** Sign in anonymously to get an idToken (Anonymous Auth is enabled). */
-void firebaseSignIn() {
-  if (strlen(FIREBASE_WEB_API_KEY) == 0) return;
-  if (WiFi.status() != WL_CONNECTED) return;
-
-  WiFiClientSecure client;
-  client.setInsecure();  // competition demo; pin the Google Root CA for production
-  HTTPClient http;
-  String url = String("https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=") + FIREBASE_WEB_API_KEY;
-  if (!http.begin(client, url)) return;
-  http.addHeader("Content-Type", "application/json");
-  int code = http.POST("{}");
-  if (code == 200) {
-    JsonDocument doc;
-    if (deserializeJson(doc, http.getString()) == DeserializationError::Ok) {
-      idToken = doc["idToken"].as<String>();
-      Serial.println("[AUTH] Anonymous sign-in OK");
-    }
-  } else {
-    Serial.printf("[AUTH] Anonymous sign-in failed: %d\n", code);
-  }
-  http.end();
+uint64_t epochMillis() {
+  const time_t now = time(nullptr);
+  return now > 0 ? static_cast<uint64_t>(now) * 1000ULL : 0ULL;
 }
 
-/** GET helper. Returns HTTP code; body is written to `out`. */
-int firebaseGet(const String& path, String& out) {
+String backendUrl(const char* path) {
+  String url = API_BASE_URL;
+  while (url.endsWith("/")) url.remove(url.length() - 1);
+  url += path;
+  return url;
+}
+
+bool configureTls(WiFiClientSecure& client) {
+  if (strlen(API_ROOT_CA_PEM) < 100) {
+    Serial.println("[TLS] Trusted root CA is missing; refusing backend connection");
+    return false;
+  }
+  client.setCACert(API_ROOT_CA_PEM);
+  return true;
+}
+
+void addDeviceAuthorization(HTTPClient& http) {
+  http.addHeader("Authorization", String("Bearer ") + DEVICE_AUTH_TOKEN);
+  http.addHeader("Content-Type", "application/json");
+}
+
+int backendGet(const char* path, String& out) {
   if (WiFi.status() != WL_CONNECTED) return -1;
   WiFiClientSecure client;
-  client.setInsecure();
+  if (!configureTls(client)) return -2;
   HTTPClient http;
-  String url = firebaseBase + path + ".json";
-  if (idToken.length()) url += "?auth=" + idToken;
-  if (!http.begin(client, url)) return -1;
-  int code = http.GET();
+  if (!http.begin(client, backendUrl(path))) return -1;
+  addDeviceAuthorization(http);
+  const int code = http.GET();
   if (code > 0) out = http.getString();
+  if (code == 200) lastBackendSuccess = millis();
   http.end();
   return code;
 }
 
-/** PUT helper. Returns HTTP code. */
-int firebasePut(const String& path, const String& json) {
+bool isCommandResultAcknowledged(int statusCode, const String& responseBody) {
+  if (statusCode < 200 || statusCode >= 300) return false;
+  JsonDocument acknowledgement;
+  if (deserializeJson(acknowledgement, responseBody) != DeserializationError::Ok) return false;
+  return acknowledgement["success"].is<bool>() && acknowledgement["success"].as<bool>();
+}
+
+int backendPost(const char* path, const String& json, String* responseBody = nullptr) {
   if (WiFi.status() != WL_CONNECTED) return -1;
   WiFiClientSecure client;
-  client.setInsecure();
+  if (!configureTls(client)) return -2;
   HTTPClient http;
-  String url = firebaseBase + path + ".json";
-  if (idToken.length()) url += "?auth=" + idToken;
-  if (!http.begin(client, url)) return -1;
-  http.addHeader("Content-Type", "application/json");
-  int code = http.PUT(json);
-  if (code == 401 || code == 403) {
-    // Root is locked: fall back to /testData where rules allow read/write.
-    permissionDenied = true;
-    if (activePath != "/testData") {
-      Serial.println("[FB] PERMISSION_DENIED on primary path — switching to /testData");
-      activePath = "/testData";
-    }
-  }
+  if (!http.begin(client, backendUrl(path))) return -1;
+  addDeviceAuthorization(http);
+  const int code = http.POST(json);
+  if (code > 0 && responseBody != nullptr) *responseBody = http.getString();
+  if (code >= 200 && code < 300) lastBackendSuccess = millis();
   http.end();
   return code;
 }
@@ -219,54 +211,104 @@ SensorReadings readSensors() {
   return r;
 }
 
-// ======================= FIREBASE PUSH ======================
+// ======================= BACKEND API TELEMETRY ======================
 void pushTelemetry(const SensorReadings& r) {
-  JsonDocument doc;
-  // These keys are the database contract for /Sensoura/sensorData; they are
-  // deliberately not the same as the internal SensorReadings member names.
-  doc["AirTemp"]          = roundf(r.temperature * 100) / 100.0f;
-  doc["SoilTemp"]         = roundf(r.soilTemperature * 100) / 100.0f;
-  doc["AirHumidity"]      = roundf(r.humidity * 100) / 100.0f;
-  doc["SoilMoisture"]     = roundf(r.soilMoisture * 100) / 100.0f;
-  doc["VOC"]              = r.gas;
-  doc["Light"]            = r.light;
-  doc["Barometricpressure"] = roundf(r.airPressure * 100) / 100.0f;
-  doc["lastUpdate"]       = (uint32_t)time(nullptr);
-
-  String json;
-  serializeJson(doc, json);
-  int code = firebasePut(activePath + "/sensorData", json);
-  if (code >= 200 && code < 300) {
-    Serial.printf("[FB] telemetry pushed (%d)\n", code);
-    setLeds(true, false);
-  } else {
-    Serial.printf("[FB] telemetry push failed: %d\n", code);
+  const uint64_t now = epochMillis();
+  if (now == 0) {
+    Serial.println("[API] System clock is not synchronized; refusing stale telemetry");
     setLeds(false, true);
+    return;
   }
 
-  // System status heartbeat
-  JsonDocument sys;
+  JsonDocument doc;
+  JsonObject sensor = doc["sensorData"].to<JsonObject>();
+  sensor["AirTemp"] = roundf(r.temperature * 100) / 100.0f;
+  sensor["SoilTemp"] = roundf(r.soilTemperature * 100) / 100.0f;
+  sensor["AirHumidity"] = roundf(r.humidity * 100) / 100.0f;
+  sensor["SoilMoisture"] = roundf(r.soilMoisture * 100) / 100.0f;
+  sensor["VOC"] = r.gas;
+  sensor["Light"] = r.light;
+  sensor["Barometricpressure"] = roundf(r.airPressure * 100) / 100.0f;
+  sensor["lastUpdate"] = now;
+
+  JsonObject sys = doc["system"].to<JsonObject>();
   sys["status"] = "online";
-  sys["lastSeen"] = (uint32_t)time(nullptr);
+  sys["lastSeen"] = now;
   sys["deviceId"] = DEVICE_ID;
   JsonObject relay = sys["relay"].to<JsonObject>();
   relay["mode"] = relayAutoMode ? "AUTO" : "MANUAL";
   relay["state"] = relayState ? "ON" : "OFF";
   relay["reason"] = relayReason;
-  relay["lastAction"] = (uint32_t)time(nullptr);
+  relay["lastAction"] = now;
   JsonObject buzzer = sys["buzzer"].to<JsonObject>();
   buzzer["muted"] = buzzerMuted;
   JsonObject leds = sys["leds"].to<JsonObject>();
-  leds["green"] = relayState;   // green = pumping
+  leds["green"] = relayState;
   leds["red"] = buzzerMuted;
 
-  String sysJson;
-  serializeJson(sys, sysJson);
-  firebasePut(activePath + "/system", sysJson);
+  String json;
+  serializeJson(doc, json);
+  const int code = backendPost("/api/device/telemetry", json);
+  if (code >= 200 && code < 300) {
+    Serial.printf("[API] telemetry accepted (%d)\n", code);
+    setLeds(true, false);
+  } else {
+    Serial.printf("[API] telemetry rejected/unavailable: %d\n", code);
+    setLeds(false, true);
+  }
 }
 
 // ======================= COMMAND HANDLING ===================
-void executeCommand(const String& id, const char* target, const char* action, uint32_t ts) {
+String pendingResultPath;
+String pendingResultJson;
+bool rebootAfterResult = false;
+
+bool postPendingResult() {
+  if (pendingResultJson.length() == 0) return true;
+  const uint64_t now = epochMillis();
+  if (now == 0) return false;
+  JsonDocument pending;
+  if (deserializeJson(pending, pendingResultJson) != DeserializationError::Ok) return false;
+  pending["timestamp"] = now;
+  pendingResultJson = "";
+  serializeJson(pending, pendingResultJson);
+  String responseBody;
+  const int code = backendPost(pendingResultPath.c_str(), pendingResultJson, &responseBody);
+  if (isCommandResultAcknowledged(code, responseBody)) {
+    pendingResultPath = "";
+    pendingResultJson = "";
+    if (rebootAfterResult) {
+      rebootAfterResult = false;
+      ESP.restart();
+    }
+    return true;
+  }
+  return false;
+}
+
+bool pushResult(const String& id, const char* target, const char* action,
+                const char* status, const char* message, const char* actualState) {
+  JsonDocument res;
+  res["commandId"] = id;
+  res["target"] = target;
+  res["requestedAction"] = action;
+  res["status"] = status;
+  res["message"] = message;
+  res["actualState"] = actualState;
+  res["timestamp"] = epochMillis();
+  String json;
+  serializeJson(res, json);
+  const String path = String("/api/device/command-results/") + id;
+  String responseBody;
+  const int code = backendPost(path.c_str(), json, &responseBody);
+  if (isCommandResultAcknowledged(code, responseBody)) return true;
+  pendingResultPath = path;
+  pendingResultJson = json;
+  Serial.printf("[API] result pending retry: %d\n", code);
+  return false;
+}
+
+void executeCommand(const String& id, const char* target, const char* action) {
   const char* status = "executed";
   const char* message = "OK";
   const char* actualState = "";
@@ -282,8 +324,9 @@ void executeCommand(const String& id, const char* target, const char* action, ui
   } else if (strcmp(target, "system") == 0) {
     if (strcmp(action, "REBOOT") == 0) {
       actualState = "REBOOTING";
-      pushResult(id, target, action, status, message, actualState, ts);
-      ESP.restart();
+      if (pushResult(id, target, action, status, message, actualState)) ESP.restart();
+      rebootAfterResult = true;
+      return;
     } else if (strcmp(action, "CALIBRATE") == 0) {
       actualState = "CALIBRATED";
       // Placeholder: capture dry/wet extremes here and persist to NVS.
@@ -295,28 +338,18 @@ void executeCommand(const String& id, const char* target, const char* action, ui
   }
 
   Serial.printf("[CMD] %s/%s -> %s (%s)\n", target, action, status, message);
-  pushResult(id, target, action, status, message, actualState, ts);
-}
-
-void pushResult(const String& id, const char* target, const char* action,
-                const char* status, const char* message, const char* actualState,
-                uint32_t ts) {
-  JsonDocument res;
-  res["commandId"] = id;
-  res["target"] = target;
-  res["requestedAction"] = action;
-  res["status"] = status;
-  res["message"] = message;
-  res["actualState"] = actualState;
-  res["timestamp"] = (uint32_t)time(nullptr);
-  String json;
-  serializeJson(res, json);
-  firebasePut(activePath + "/commandResults/" + id, json);
+  pushResult(id, target, action, status, message, actualState);
 }
 
 void pollCommands() {
+  if (pendingResultJson.length() > 0) {
+    postPendingResult();
+    return;
+  }
+  if (epochMillis() == 0) return;
+
   String body;
-  int code = firebaseGet(activePath + "/commands", body);
+  const int code = backendGet("/api/device/commands", body);
   if (code != 200 || body == "null" || body.length() == 0) return;
 
   JsonDocument doc;
@@ -324,14 +357,14 @@ void pollCommands() {
 
   for (JsonPair kv : doc.as<JsonObject>()) {
     JsonObject cmd = kv.value().as<JsonObject>();
-    uint32_t ts = cmd["timestamp"] | 0UL;
-    if (ts <= lastCommandTs) continue;    // already processed
-    lastCommandTs = ts;
+    const char* targetDeviceId = cmd["deviceId"] | "";
+    if (strcmp(targetDeviceId, DEVICE_ID) != 0) continue;
 
     String id = kv.key().c_str();
     const char* target = cmd["target"] | "";
     const char* action = cmd["action"] | "";
-    executeCommand(id, target, action, ts);
+    executeCommand(id, target, action);
+    break;  // wait for the server to record this result before fetching another command
   }
 }
 
@@ -349,6 +382,18 @@ void setup() {
   setBuzzer(false);
   setLeds(false, true);
 
+  if (strlen(DEVICE_AUTH_TOKEN) < 32 || strstr(DEVICE_AUTH_TOKEN, "REPLACE_WITH")
+      || strncmp(API_BASE_URL, "https://", 8) != 0
+      || strstr(API_BASE_URL, "your-public-dashboard.example")
+      || strstr(API_ROOT_CA_PEM, "REPLACE_WITH")) {
+    Serial.println("[SECURITY] Replace the device token, HTTPS origin, and trusted root CA in secrets.h");
+    while (true) {
+      setRelay(false, "boot");
+      setLeds(false, true);
+      delay(1000);
+    }
+  }
+
   analogReadResolution(12);
 
   dht.begin();
@@ -359,8 +404,10 @@ void setup() {
   }
 
   ensureWifi();
-  configTime(0, 0, "pool.ntp.org");  // epoch timestamps for Firebase
-  firebaseSignIn();
+  configTime(0, 0, "pool.ntp.org");  // backend rejects stale or unsynchronized timestamps
+  const uint32_t clockWaitStarted = millis();
+  while (epochMillis() == 0 && millis() - clockWaitStarted < 15000) delay(500);
+  if (epochMillis() == 0) Serial.println("[TIME] Clock unavailable; API telemetry and commands remain disabled");
 
   // Initial boot heartbeat so the dashboard shows the device immediately
   SensorReadings r = readSensors();
@@ -371,6 +418,11 @@ void loop() {
   ensureWifi();
 
   uint32_t now = millis();
+  if ((lastBackendSuccess == 0 || now - lastBackendSuccess > BACKEND_FAILSAFE_MS) && relayState) {
+    setRelay(false, "network-failsafe");
+    setLeds(false, true);
+  }
+
   if (now - lastTelemetry >= TELEMETRY_INTERVAL_MS) {
     lastTelemetry = now;
     SensorReadings r = readSensors();

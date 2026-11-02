@@ -4,13 +4,44 @@ import './util-shim.js';
 import { getLogger } from '../utils/logger.js';
 import { getEnv } from '../config/env.js';
 import type { SensorData } from '../models/sensoura.js';
-// Type-only import: erased at compile time so the native binding is never
-// required at module load (installed with --ignore-scripts, it may be missing).
-import type * as TF from '@tensorflow/tfjs-node';
 import { SimpleLinearRegression } from 'ml-regression';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+
+type TensorFlowLogs = Record<string, number>;
+
+interface TensorFlowTensor {
+  slice(begin: number[], size: number[]): TensorFlowTensor;
+  dispose(): void;
+  dataSync(): ArrayLike<number>;
+}
+
+interface TensorFlowModel {
+  add(layer: unknown): void;
+  compile(config: { optimizer: unknown; loss: string; metrics: string[] }): void;
+  fit(xs: TensorFlowTensor, ys: TensorFlowTensor, options: {
+    epochs: number;
+    batchSize: number;
+    validationData: [TensorFlowTensor, TensorFlowTensor];
+    verbose: number;
+    callbacks?: { onEpochEnd?: (epoch: number, logs?: TensorFlowLogs) => void };
+  }): Promise<unknown>;
+  save(path: string): Promise<unknown>;
+  predict(input: TensorFlowTensor): TensorFlowTensor;
+}
+
+interface TensorFlowModule {
+  scalar(value: number): TensorFlowTensor;
+  loadLayersModel(path: string): Promise<TensorFlowModel>;
+  sequential(): TensorFlowModel;
+  layers: {
+    dense(config: Record<string, unknown>): unknown;
+    dropout(config: Record<string, unknown>): unknown;
+  };
+  train: { adam(learningRate: number): unknown };
+  tensor2d(values: number[][]): TensorFlowTensor;
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -31,12 +62,12 @@ interface ModelMetadata {
   backend: 'tfjs-node' | 'fallback';
 }
 
-type LayersModel = TF.LayersModel;
+type LayersModel = TensorFlowModel;
 
 const MAX_HISTORY = 500;
 
 export class AIEngine {
-  private tf: typeof TF | null = null;
+  private tf: TensorFlowModule | null = null;
   private soilMoistureModel: LayersModel | null = null;
   private gasModel: LayersModel | null = null;
   private temperatureModel: LayersModel | null = null;
@@ -78,9 +109,11 @@ export class AIEngine {
   }
 
   /** Attempt to load tfjs-node lazily; returns null when the native binding is missing. */
-  private async loadTf(): Promise<typeof TF | null> {
+  private async loadTf(): Promise<TensorFlowModule | null> {
     try {
-      const tf = await import('@tensorflow/tfjs-node');
+      // Use a variable module specifier so TypeScript does not require this optional native package.
+      const moduleName = '@tensorflow/tfjs-node';
+      const tf = await import(moduleName) as unknown as TensorFlowModule;
       // Sanity-check that the native backend actually works
       const probe = tf.scalar(1);
       probe.dispose();
@@ -290,7 +323,7 @@ export class AIEngine {
       validationData: [xsVal, ysVal],
       verbose: 0,
       callbacks: {
-        onEpochEnd: (epoch, logs) => {
+        onEpochEnd: (epoch: number, logs?: TensorFlowLogs) => {
           if (epoch % 10 === 0) {
             logger.debug({ model: name, epoch, loss: logs?.loss, valLoss: logs?.val_loss }, 'Training progress');
           }
@@ -345,7 +378,7 @@ export class AIEngine {
     if (!this.tf || !model) return null;
     const tf = this.tf;
     const input = tf.tensor2d([features]);
-    const prediction = model.predict(input) as TF.Tensor;
+    const prediction = model.predict(input) as TensorFlowTensor;
     const value = prediction.dataSync()[0];
     input.dispose();
     prediction.dispose();

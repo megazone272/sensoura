@@ -1,272 +1,92 @@
-import { useSensorData, useSystem, useConnection, useAISuggestions, useSensorStore } from '@store/sensorStore';
-import {
-  Thermometer,
-  Droplets,
-  Flame,
-  Sun,
-  Gauge,
-  Wifi,
-  Database,
-  AlertTriangle,
-  Zap,
-  Droplet,
-} from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Activity, AlertTriangle, Cloud, Droplets, Gauge, Lightbulb, Thermometer, Waves, Wind } from 'lucide-react';
+import { Area, AreaChart, ResponsiveContainer } from 'recharts';
 import { formatDistanceToNow } from 'date-fns';
-import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { useConnection, useSensorData, useSystem } from '@store/sensorStore';
+import type { SensorData } from '@shared/types';
+import { AnimatedNumber } from '@components/Motion';
+import { useLanguage } from '@contexts/LanguageContext';
+import { getBackendHealth, getBackendMode } from '@services/backendHealth';
+import { isTelemetryStale, safeDate, validTimestamp } from '@services/telemetry';
 
-function SensorCard({
-  label,
-  value,
-  unit,
-  icon: Icon,
-  lastUpdate,
-}: {
-  label: string;
-  value: number | null | undefined;
-  unit?: string;
-  icon: React.ComponentType<any>;
-  lastUpdate?: number;
-}) {
-  const formatted =
-    value != null && !isNaN(Number(value))
-      ? Number(value).toLocaleString(undefined, {
-          minimumFractionDigits: unit === 'hPa' ? 1 : 1,
-          maximumFractionDigits: unit === 'hPa' ? 1 : 1,
-        })
-      : '—';
-
-  const lastText = lastUpdate ? formatDistanceToNow(lastUpdate, { addSuffix: true }) : null;
-
-  return (
-    <div className="relative overflow-hidden rounded-xl bg-[var(--bg-card)] border border-[var(--border-primary)] p-4 hover:border-[var(--border-secondary)] transition-all duration-200">
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <div className="w-9 h-9 rounded-lg bg-[var(--accent-primary)]/10 flex items-center justify-center">
-            <Icon className="w-4 h-4 text-[var(--accent-primary)]" />
-          </div>
-          <div>
-            <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider">{label}</p>
-          </div>
-        </div>
-      </div>
-      <div className="flex items-baseline gap-1.5">
-        <span className="text-2xl font-bold text-[var(--text-primary)] tabular-nums">{formatted}</span>
-        {unit && <span className="text-sm text-[var(--text-muted)]">{unit}</span>}
-      </div>
-      {lastText && (
-        <p className="text-xs text-[var(--text-muted)] mt-2">Updated {lastText}</p>
-      )}
-    </div>
-  );
-}
+type SensorKey = Exclude<keyof SensorData, 'lastUpdate'>;
+type ReadingConfig = { key: SensorKey; label: 'sensorAirTemp' | 'sensorSoilTemp' | 'sensorHumidity' | 'sensorMoisture' | 'sensorLight' | 'sensorPressure' | 'sensorVOC'; unit: string; icon: typeof Thermometer; color: string; digits: number };
+const readings: ReadingConfig[] = [
+  { key: 'AirTemp', label: 'sensorAirTemp', unit: '°C', icon: Thermometer, color: '#ff8b72', digits: 1 },
+  { key: 'SoilTemp', label: 'sensorSoilTemp', unit: '°C', icon: Thermometer, color: '#f6a75d', digits: 1 },
+  { key: 'AirHumidity', label: 'sensorHumidity', unit: '%', icon: Wind, color: '#5bc9e7', digits: 1 },
+  { key: 'SoilMoisture', label: 'sensorMoisture', unit: '%', icon: Droplets, color: '#22d9ba', digits: 1 },
+  { key: 'Light', label: 'sensorLight', unit: 'lux', icon: Lightbulb, color: '#e8c66a', digits: 0 },
+  { key: 'Barometricpressure', label: 'sensorPressure', unit: 'hPa', icon: Gauge, color: '#9c9bff', digits: 1 },
+  { key: 'VOC', label: 'sensorVOC', unit: 'index', icon: Waves, color: '#c084fc', digits: 0 },
+];
+type SessionSeries = Partial<Record<SensorKey, number[]>>;
+type BackendMode = 'sdk' | 'mock' | 'unknown';
 
 export function Sensors() {
   const sensorData = useSensorData();
   const system = useSystem();
-  const { connected } = useConnection();
-  useAISuggestions();
-  const { sendCommand } = useSensorStore();
-  const [, setHistory] = useState<Record<string, number[]>>({});
+  const { connected, connecting, error } = useConnection();
+  const { language, t } = useLanguage();
+  const [series, setSeries] = useState<SessionSeries>({});
+  const [backendMode, setBackendMode] = useState<BackendMode>('unknown');
+  const lastRecorded = useRef<number | null>(null);
+  const locale = language === 'ar' ? 'ar-EG' : 'en-US';
+  const verifiedSource = backendMode === 'sdk';
+  const displaySensorData = verifiedSource ? sensorData : null;
+  const displaySystem = verifiedSource ? system : null;
+  const stale = displaySensorData ? isTelemetryStale(displaySensorData.lastUpdate) : false;
+  const telemetryTime = safeDate(displaySensorData?.lastUpdate);
+  const lastSeen = safeDate(displaySystem?.lastSeen);
 
   useEffect(() => {
-    if (!sensorData) return;
-    setHistory((prev) => {
-      const next = { ...prev };
-      Object.entries(sensorData).forEach(([key, value]) => {
-        if (typeof value === 'number') {
-          next[key] = next[key] || [];
-          next[key].push(value);
-          if (next[key].length > 50) next[key].shift();
-        }
-      });
+    let active = true;
+    void getBackendHealth().then((health) => {
+      if (!active) return;
+      setBackendMode(getBackendMode(health));
+    }).catch(() => { if (active) setBackendMode('unknown'); });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!verifiedSource || !connected || !sensorData) return;
+    const timestamp = validTimestamp(sensorData.lastUpdate);
+    if (!timestamp || timestamp === lastRecorded.current) return;
+    lastRecorded.current = timestamp;
+    setSeries((current) => {
+      const next = { ...current };
+      for (const item of readings) {
+        const value = sensorData[item.key];
+        if (Number.isFinite(value)) next[item.key] = [...(current[item.key] ?? []).slice(-23), value];
+      }
       return next;
     });
-  }, [sensorData]);
+  }, [verifiedSource, connected, sensorData]);
 
-  return (
-    <div className="space-y-6 animate-fade-in">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Sensor Readings</h1>
-          <p className="text-[var(--text-muted)] mt-1">
-            Live telemetry from {system?.deviceId ?? 'the deployed device'}
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[var(--bg-tertiary)] border border-[var(--border-primary)]">
-            <span className={`status-dot ${connected ? 'online' : 'offline'}`} />
-            <span className="text-sm font-medium">{connected ? 'LIVE' : 'OFFLINE'}</span>
-          </div>
-          <button
-            className="btn btn-secondary"
-            onClick={() => sendCommand({ target: 'system', action: 'REBOOT', mode: 'MANUAL' })}
-          >
-            <Wifi className="w-4 h-4" />
-            Reboot
-          </button>
-        </div>
-      </div>
+  useEffect(() => { lastRecorded.current = null; setSeries({}); }, [system?.deviceId]);
 
-      {/* Environment */}
-      <section>
-        <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-          <Thermometer className="w-5 h-5 text-[var(--accent-primary)]" />
-          Environment
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-          <SensorCard
-            label="Air Temperature"
-            value={sensorData?.AirTemp}
-            unit="°C"
-            icon={Thermometer}
-            lastUpdate={sensorData?.lastUpdate}
-          />
-          <SensorCard
-            label="Soil Temperature"
-            value={sensorData?.SoilTemp}
-            unit="°C"
-            icon={Thermometer}
-            lastUpdate={sensorData?.lastUpdate}
-          />
-          <SensorCard
-            label="Humidity"
-            value={sensorData?.AirHumidity}
-            unit="%"
-            icon={Droplets}
-            lastUpdate={sensorData?.lastUpdate}
-          />
-          <SensorCard
-            label="Light"
-            value={sensorData?.Light}
-            unit="lux"
-            icon={Sun}
-            lastUpdate={sensorData?.lastUpdate}
-          />
-          <SensorCard
-            label="Air Pressure"
-            value={sensorData?.Barometricpressure}
-            unit="hPa"
-            icon={Gauge}
-            lastUpdate={sensorData?.lastUpdate}
-          />
-        </div>
-      </section>
+  return <div className="space-y-7">
+    <header className="page-heading" data-motion-item><div><p className="eyebrow">TELEMETRY</p><h1>{t('navSensors')}</h1><p>{t('overviewSubtitle')}</p></div><span className={`sensoura-status-chip ${connected && verifiedSource && !stale ? 'is-online' : connecting ? 'is-warning' : 'is-offline'}`}><span className={`status-dot ${connected && verifiedSource && !stale ? 'online' : connecting ? 'warning' : 'offline'}`} />{connected && verifiedSource && !stale ? t('live') : connecting ? t('connecting') : t('offline')}</span></header>
 
-      {/* Soil & Air Quality */}
-      <section>
-        <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-          <Droplet className="w-5 h-5 text-[var(--accent-primary)]" />
-          Soil & Air Quality
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <SensorCard
-            label="Soil Moisture"
-            value={sensorData?.SoilMoisture}
-            unit="%"
-            icon={Droplet}
-            lastUpdate={sensorData?.lastUpdate}
-          />
-          <SensorCard
-            label="Gas (VOC)"
-            value={sensorData?.VOC}
-            unit="VOC Index"
-            icon={Flame}
-            lastUpdate={sensorData?.lastUpdate}
-          />
-        </div>
-      </section>
+    {backendMode === 'mock' && <div className="status-banner is-warning" role="status" data-motion-item><AlertTriangle size={16} />{language === 'ar' ? 'الخادم المحلي يولّد بيانات محاكاة؛ أخفيناها بدل عرضها كقراءات ESP32.' : 'The local backend produces mock readings; they are hidden rather than presented as ESP32 telemetry.'}</div>}
+    {backendMode === 'unknown' && <div className="status-banner is-warning" role="status" data-motion-item><AlertTriangle size={16} />{language === 'ar' ? 'تعذر التحقق من مصدر البيانات؛ القراءات مخفية.' : 'Could not verify the telemetry source; readings are hidden.'}</div>}
+    {error && <div className="status-banner is-danger" role="alert" data-motion-item><AlertTriangle size={16} />{error}</div>}
+    {!displaySensorData && backendMode === 'sdk' && <div className="empty-state-card" role="status" data-motion-item><div className="empty-state-icon"><Cloud size={20} /></div><div><h2>{t('noSensorData')}</h2><p>{connecting ? t('connecting') : t('connectHint')}</p></div></div>}
+    {displaySensorData && stale && <div className="status-banner is-warning" role="status" data-motion-item><AlertTriangle size={16} />{t('stale')} · {telemetryTime ? formatDistanceToNow(telemetryTime, { addSuffix: true }) : t('unavailable')}</div>}
 
-      {/* Alerts & System */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 card">
-          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <AlertTriangle className="w-5 h-5 text-[var(--accent-warning)]" />
-            Alerts & System Status
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="rounded-xl bg-[var(--accent-warning)]/10 border border-[var(--accent-warning)]/30 p-4">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="w-5 h-5 text-[var(--accent-warning)] shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-semibold text-[var(--text-primary)]">Sensor Alert</p>
-                  <p className="text-sm text-[var(--text-muted)] mt-1">
-                    {system?.status === 'offline'
-                      ? 'Device is offline — check power and connectivity.'
-                      : system?.status === 'error'
-                      ? 'Device reported an error — check sensor wiring and firmware logs.'
-                      : 'All sensors reporting within normal ranges.'}
-                  </p>
-                  <p className="text-xs text-[var(--text-muted)] mt-2">
-                    Last seen: {system?.lastSeen ? formatDistanceToNow(system.lastSeen, { addSuffix: true }) : '—'}
-                  </p>
-                </div>
-              </div>
-            </div>
+    <section data-motion-item><div className="section-heading"><div><p className="eyebrow">ENVIRONMENT</p><h2>{t('sensorSummary')}</h2></div><div className="telemetry-update">{t('lastUpdate')}: {telemetryTime ? formatDistanceToNow(telemetryTime, { addSuffix: true }) : t('unavailable')}</div></div>
+      <div className="sensor-reading-grid">{readings.map(({ key, label, unit, icon: Icon, color, digits }) => <article className="sensor-reading-card" key={key}><div className="sensor-reading-heading"><span className="metric-icon" style={{ color, backgroundColor: `${color}18` }}><Icon size={18} /></span><span>{t(label)}</span></div>
+        <div className="sensor-reading-value"><AnimatedNumber value={displaySensorData?.[key]} digits={digits} locale={locale} /><span>{unit}</span></div>
+        <div className="sensor-sparkline">{(series[key]?.length ?? 0) > 1 ? <ResponsiveContainer width="100%" height="100%"><AreaChart data={series[key]!.map((value, index) => ({ index, value }))}><Area type="monotone" dataKey="value" stroke={color} fill={color} fillOpacity={0.11} strokeWidth={2} isAnimationActive={false} /></AreaChart></ResponsiveContainer> : <span>{displaySensorData ? t('noTrend') : t('unavailable')}</span>}</div>
+        <p className="metric-footnote">{(series[key]?.length ?? 0) > 1 ? t('sessionTrend') : t('unavailable')}</p>
+      </article>)}</div>
+    </section>
 
-            <div className="rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border-primary)] p-4">
-              <h3 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">System Info</h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-[var(--text-muted)]">Device ID</span>
-                  <span className="font-mono text-[var(--text-primary)]">{system?.deviceId ?? '—'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-[var(--text-muted)]">Status</span>
-                  <span className="font-medium capitalize text-[var(--text-primary)]">{system?.status ?? '—'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-[var(--text-muted)]">Pump/Relay</span>
-                  <span className="font-mono text-[var(--text-primary)]">
-                    {system?.relay?.state ?? 'OFF'} • {system?.relay?.mode ?? 'AUTO'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-[var(--text-muted)]">Buzzer</span>
-                  <span className="text-[var(--text-primary)]">{system?.buzzer?.muted ? 'Muted' : 'Active'}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="card">
-          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <Zap className="w-5 h-5 text-[var(--accent-primary)]" />
-            Quick Actions
-          </h2>
-          <div className="space-y-2">
-            <button
-              className="btn btn-primary w-full justify-center"
-              onClick={() => sendCommand({ target: 'pump', action: 'ON', mode: 'MANUAL' })}
-            >
-              <Droplets className="w-4 h-4" />
-              Irrigate Now
-            </button>
-            <button
-              className="btn btn-secondary w-full justify-center"
-              onClick={() => sendCommand({ target: 'pump', action: 'OFF', mode: 'MANUAL' })}
-            >
-              <AlertTriangle className="w-4 h-4" />
-              Emergency Stop
-            </button>
-            <button
-              className="btn btn-secondary w-full justify-center"
-              onClick={() => sendCommand({ target: 'buzzer', action: 'MUTE', mode: 'MANUAL' })}
-            >
-              <Zap className="w-4 h-4" />
-              Mute Buzzer
-            </button>
-            <button
-              className="btn btn-secondary w-full justify-center"
-              onClick={() => sendCommand({ target: 'system', action: 'CALIBRATE', mode: 'MANUAL' })}
-            >
-              <Database className="w-4 h-4" />
-              Calibrate Sensors
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+    <section className="system-panel" data-motion-item><div className="section-heading"><div><p className="eyebrow">DEVICE STATE</p><h2>{t('systemStatus')}</h2></div><Link className="text-link" to="/irrigation">{t('navIrrigation')} <Activity size={15} /></Link></div>
+      <div className="system-state-grid"><StateCard label={t('deviceId')} value={displaySystem?.deviceId || t('unavailable')} mono /><StateCard label={t('systemStatus')} value={displaySystem?.status ? t(displaySystem.status === 'online' ? 'connected' : displaySystem.status === 'offline' ? 'disconnected' : 'deviceError') : t('unknown')} /><StateCard label={t('pumpState')} value={displaySystem?.relay ? `${displaySystem.relay.state} · ${displaySystem.relay.mode}` : t('unavailable')} /><StateCard label={t('buzzer')} value={displaySystem?.buzzer ? (displaySystem.buzzer.muted ? t('mute') : t('unmute')) : t('unavailable')} /><StateCard label={t('ledStatus')} value={displaySystem?.leds ? `Green ${displaySystem.leds.green ? 'ON' : 'OFF'} · Red ${displaySystem.leds.red ? 'ON' : 'OFF'}` : t('unavailable')} /><StateCard label={t('lastUpdate')} value={lastSeen ? formatDistanceToNow(lastSeen, { addSuffix: true }) : t('unavailable')} /></div>
+    </section>
+  </div>;
 }
+
+function StateCard({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) { return <div className="system-state-card"><span>{label}</span><strong className={mono ? 'mono' : ''}>{value}</strong></div>; }

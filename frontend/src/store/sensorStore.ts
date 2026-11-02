@@ -1,7 +1,12 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { io, Socket } from 'socket.io-client';
+import type { Socket } from 'socket.io-client';
 import type { SensorData, SystemStatus, Command, CommandResult, AISuggestion } from '@shared/types';
+import { endpoints } from '@services/api';
+import { getFreshAccessToken } from '@services/authToken';
+import { connectSocket, disconnectSocket, getSocket } from '@services/socket';
+
+let connectionAttempt = 0;
 
 interface SensorState {
   // Data
@@ -18,7 +23,7 @@ interface SensorState {
   error: string | null;
 
   // Actions
-  connect: (token?: string, deviceId?: string) => void;
+  connect: (token?: string, deviceId?: string) => Promise<void>;
   disconnect: () => void;
   sendCommand: (command: Omit<Command, 'id' | 'timestamp'>) => Promise<string>;
   approveSuggestion: (id: string) => Promise<void>;
@@ -39,8 +44,6 @@ interface SensorState {
   _updateAISuggestion: (suggestion: AISuggestion) => void;
 }
 
-const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:3000';
-
 export const useSensorStore = create<SensorState>()(
   subscribeWithSelector((set, get) => ({
     // Initial state
@@ -55,93 +58,107 @@ export const useSensorStore = create<SensorState>()(
     error: null,
 
     // Connect to Socket.IO
-    connect: (token, deviceId) => {
+    connect: async (token, deviceId) => {
+      const attempt = ++connectionAttempt;
       const { socket: existingSocket } = get();
-      if (existingSocket?.connected) return;
+      if (existingSocket) {
+        if (existingSocket.connected) return;
+      }
 
       set({ connecting: true, error: null });
+      const resolvedToken = token ?? await getFreshAccessToken();
+      if (attempt !== connectionAttempt) return;
+      if (!resolvedToken) {
+        set({ connected: false, connecting: false, error: 'Authentication required' });
+        return;
+      }
 
-      const socket = io(WS_URL, {
-        auth: { token, deviceId },
-        transports: ['websocket', 'polling'],
-        reconnection: true,
-        reconnectionAttempts: 10,
-        reconnectionDelay: 1000,
-        reconnectionDelayMax: 5000,
-        timeout: 10000,
-      });
+      const socket = existingSocket ?? getSocket(false);
 
-      socket.on('connect', () => {
-        set({ connected: true, connecting: false, socket, error: null });
-        console.log('[Socket] Connected:', socket.id);
-      });
-
-      socket.on('disconnect', (reason) => {
-        set({ connected: false, error: `Disconnected: ${reason}` });
-        console.log('[Socket] Disconnected:', reason);
-      });
-
-      socket.on('connect_error', (err) => {
-        set({ connecting: false, error: err.message });
-        console.error('[Socket] Connection error:', err);
-      });
-
-      // Initial state
-      socket.on('init', (state: Partial<SensorState>) => {
-        set({
-          sensorData: state.sensorData ?? null,
-          system: state.system ?? null,
-          commands: state.commands ?? {},
-          commandResults: state.commandResults ?? {},
-          aiSuggestions: state.aiSuggestions ?? {},
+      if (!existingSocket) {
+        socket.on('connect', () => {
+          set({ connected: true, connecting: false, socket, error: null });
+          console.log('[Socket] Connected:', socket.id);
         });
-      });
 
-      // Real-time updates
-      socket.on('sensorData', (update: { sensorData: SensorData }) => {
-        set({ sensorData: update.sensorData });
-      });
+        socket.on('disconnect', (reason) => {
+          set({
+            connected: false,
+            connecting: reason !== 'io client disconnect',
+            error: `Disconnected: ${reason}`,
+          });
+          console.log('[Socket] Disconnected:', reason);
+        });
 
-      socket.on('system', (update: { system: SystemStatus }) => {
-        set({ system: update.system });
-      });
+        socket.on('connect_error', (err) => {
+          set({ connecting: false, error: err.message });
+          console.error('[Socket] Connection error:', err);
+        });
 
-      socket.on('commands', (update: { commands: Record<string, Command> }) => {
-        set({ commands: update.commands });
-      });
+        socket.io.on('reconnect_attempt', () => {
+          set({ connected: false, connecting: true, error: null });
+        });
 
-      socket.on('commandResults', (update: { commandResults: Record<string, CommandResult> }) => {
-        set({ commandResults: update.commandResults });
-      });
+        socket.io.on('reconnect_failed', () => {
+          set({ connected: false, connecting: false, error: 'Unable to reconnect to the backend' });
+        });
 
-      socket.on('aiSuggestions', (update: { aiSuggestions: Record<string, AISuggestion> }) => {
-        set({ aiSuggestions: update.aiSuggestions });
-      });
+        // Initial state
+        socket.on('init', (state: Partial<SensorState>) => {
+          set({
+            sensorData: state.sensorData ?? null,
+            system: state.system ?? null,
+            commands: state.commands ?? {},
+            commandResults: state.commandResults ?? {},
+            aiSuggestions: state.aiSuggestions ?? {},
+          });
+        });
 
-      // Command result acknowledgment
-      socket.on('commandResult', (result: CommandResult) => {
-        set(state => ({
-          commandResults: { ...state.commandResults, [result.commandId]: result },
-        }));
-      });
+        // The server sends partial state snapshots after Firebase/mock updates.
+        socket.on('state:update', (update: Partial<SensorState>) => {
+          set((state) => ({ ...state, ...update }));
+        });
 
-      // Suggestion updates
-      socket.on('suggestionUpdate', (suggestion: AISuggestion) => {
-        set(state => ({
-          aiSuggestions: { ...state.aiSuggestions, [suggestion.id!]: suggestion },
-        }));
-      });
+        socket.on('sensor:update', (update: { sensorData?: SensorData }) => {
+          if (update?.sensorData) set({ sensorData: update.sensorData });
+        });
 
-      set({ socket });
+        socket.on('command:feedback', (feedback: { status?: string }) => {
+          if (feedback?.status === 'failed') {
+            set({ error: 'The backend could not queue the command' });
+          }
+        });
+
+        // Command result acknowledgment
+        socket.on('commandResult', (result: CommandResult) => {
+          set(state => ({
+            commandResults: { ...state.commandResults, [result.commandId]: result },
+          }));
+        });
+
+        // Suggestion updates
+        socket.on('suggestionUpdate', (suggestion: AISuggestion) => {
+          const suggestionId = suggestion?.id;
+          if (!suggestionId) return;
+          set(state => ({
+            aiSuggestions: { ...state.aiSuggestions, [suggestionId]: suggestion },
+          }));
+        });
+      }
+
+      set({ socket, connecting: true });
+      if (socket.connected) {
+        set({ connected: true, connecting: false, error: null });
+        return;
+      }
+      connectSocket(resolvedToken, deviceId);
     },
 
     // Disconnect
     disconnect: () => {
-      const { socket } = get();
-      if (socket) {
-        socket.disconnect();
-        set({ socket: null, connected: false, connecting: false });
-      }
+      connectionAttempt += 1;
+      disconnectSocket();
+      set({ socket: null, connected: false, connecting: false, error: null });
     },
 
     // Send command via socket
@@ -149,15 +166,12 @@ export const useSensorStore = create<SensorState>()(
       const { socket } = get();
       if (!socket?.connected) throw new Error('Not connected');
 
-      return new Promise((resolve, reject) => {
-        socket.emit('command', command, (response: { success: boolean; commandId?: string; error?: string }) => {
-          if (response.success && response.commandId) {
-            resolve(response.commandId);
-          } else {
-            reject(new Error(response.error || 'Command failed'));
-          }
-        });
-      });
+      const response = await endpoints.sendCommand(command);
+      const commandId = response.data?.commandId;
+      if (!response.data?.success || typeof commandId !== 'string' || !commandId) {
+        throw new Error(response.data?.error || 'Command failed');
+      }
+      return commandId;
     },
 
     // Approve AI suggestion
@@ -165,12 +179,8 @@ export const useSensorStore = create<SensorState>()(
       const { socket } = get();
       if (!socket?.connected) throw new Error('Not connected');
 
-      return new Promise((resolve, reject) => {
-        socket.emit('approveSuggestion', id, (response: { success: boolean; error?: string }) => {
-          if (response.success) resolve();
-          else reject(new Error(response.error || 'Failed to approve'));
-        });
-      });
+      const response = await endpoints.approveSuggestion(id);
+      if (!response.data?.success) throw new Error(response.data?.error || 'Failed to approve');
     },
 
     // Reject AI suggestion
@@ -178,12 +188,8 @@ export const useSensorStore = create<SensorState>()(
       const { socket } = get();
       if (!socket?.connected) throw new Error('Not connected');
 
-      return new Promise((resolve, reject) => {
-        socket.emit('rejectSuggestion', id, (response: { success: boolean; error?: string }) => {
-          if (response.success) resolve();
-          else reject(new Error(response.error || 'Failed to reject'));
-        });
-      });
+      const response = await endpoints.rejectSuggestion(id);
+      if (!response.data?.success) throw new Error(response.data?.error || 'Failed to reject');
     },
 
     // Relay control
@@ -191,12 +197,12 @@ export const useSensorStore = create<SensorState>()(
       const { socket } = get();
       if (!socket?.connected) throw new Error('Not connected');
 
-      return new Promise((resolve, reject) => {
-        socket.emit('relayControl', { state, reason }, (response: { success: boolean; commandId?: string; error?: string }) => {
-          if (response.success && response.commandId) resolve(response.commandId);
-          else reject(new Error(response.error || 'Failed to control relay'));
-        });
-      });
+      const response = await endpoints.controlRelay(state, reason);
+      const commandId = response.data?.commandId;
+      if (!response.data?.success || typeof commandId !== 'string' || !commandId) {
+        throw new Error(response.data?.error || 'Failed to control relay');
+      }
+      return commandId;
     },
 
     // Buzzer control
@@ -204,12 +210,12 @@ export const useSensorStore = create<SensorState>()(
       const { socket } = get();
       if (!socket?.connected) throw new Error('Not connected');
 
-      return new Promise((resolve, reject) => {
-        socket.emit('buzzerControl', { action }, (response: { success: boolean; commandId?: string; error?: string }) => {
-          if (response.success && response.commandId) resolve(response.commandId);
-          else reject(new Error(response.error || 'Failed to control buzzer'));
-        });
-      });
+      const response = await endpoints.controlBuzzer(action);
+      const commandId = response.data?.commandId;
+      if (!response.data?.success || typeof commandId !== 'string' || !commandId) {
+        throw new Error(response.data?.error || 'Failed to control buzzer');
+      }
+      return commandId;
     },
 
     // Internal setters
@@ -224,9 +230,11 @@ export const useSensorStore = create<SensorState>()(
     _updateCommandResult: (result) => set(state => ({
       commandResults: { ...state.commandResults, [result.commandId]: result },
     })),
-    _updateAISuggestion: (suggestion) => set(state => ({
-      aiSuggestions: { ...state.aiSuggestions, [suggestion.id!]: suggestion },
-    })),
+    _updateAISuggestion: (suggestion) => {
+      const suggestionId = suggestion.id;
+      if (!suggestionId) return;
+      set(state => ({ aiSuggestions: { ...state.aiSuggestions, [suggestionId]: suggestion } }));
+    },
   }))
 );
 

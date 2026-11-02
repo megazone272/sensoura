@@ -1,240 +1,142 @@
-import { getLogger } from '../utils/logger.js';
 import { Server as SocketIOServer, Socket } from 'socket.io';
-import { Server as HttpServer } from 'http';
-import { z } from 'zod';
+import { getLogger } from '../utils/logger.js';
+import {
+  buildSocketAuthContext,
+  buildSocketAuthContextWithFirebase,
+  AuthContext,
+} from '../services/auth.js';
 import { realtimeService } from '../services/realtime.js';
-import type { Command } from '../models/sensoura.js';
-
-// Same validation the HTTP /api/command route applies — the socket path must
-// not be a weaker entry point for unvalidated commands.
-const socketCommandSchema = z.object({
-  target: z.enum(['pump', 'buzzer', 'led', 'system']),
-  action: z.enum(['ON', 'OFF', 'MUTE', 'UNMUTE', 'REBOOT', 'CALIBRATE']),
-  mode: z.enum(['MANUAL', 'AUTO']).default('MANUAL'),
-});
 
 const logger = getLogger('socket');
 
-interface AuthenticatedSocket extends Socket {
-  userId?: string;
-  role?: 'admin' | 'operator' | 'viewer' | 'device';
-  deviceId?: string;
+// ---------------------------------------------------------------------------
+// Device telemetry/control uses the authenticated HTTPS REST endpoints only.
+// Socket.IO is reserved for dashboard users; the firmware does not connect here.
+// ---------------------------------------------------------------------------
+
+export type IOHookResult =
+  | { ok: true; authContext: AuthContext }
+  | {
+      ok: false;
+      reason: 'auth_missing' | 'auth_invalid' | 'device_not_allowed';
+    };
+
+export function buildSocketAuthContextFromPayload(
+  token: string | undefined,
+  deviceId: string | undefined,
+  clientRole: string | undefined,
+): AuthContext {
+  return buildSocketAuthContext(token, deviceId, clientRole);
 }
 
-const connectedClients = new Map<string, AuthenticatedSocket>();
+export async function buildSocketAuthContextFromSocket(
+  socket: Socket,
+): Promise<IOHookResult> {
+  const token = typeof socket.handshake.auth?.token === 'string' ? socket.handshake.auth.token : undefined;
+  const deviceId = typeof socket.handshake.auth?.deviceId === 'string' ? socket.handshake.auth.deviceId : undefined;
+  const clientRole = socket.handshake.auth?.role as string | undefined;
 
-export function initializeSocketIO(httpServer: HttpServer, frontendUrl: string): SocketIOServer {
-  const io = new SocketIOServer(httpServer, {
+  const authContext = await buildSocketAuthContextWithFirebase(
+    token,
+    deviceId,
+    clientRole,
+  );
+
+  if (authContext.authMethod === 'unauthenticated') {
+    return { ok: false, reason: token ? 'auth_invalid' : 'auth_missing' };
+  }
+
+  if (authContext.isDevice) {
+    return { ok: false, reason: 'device_not_allowed' };
+  }
+
+  return { ok: true, authContext };
+}
+
+export function registerSocketHooks(
+  io: SocketIOServer,
+  _frontendUrl: string | string[],
+): void {
+  // trust proxy is a Fastify configuration, not a Socket.IO Server method.
+
+  io.use((socket, next) => {
+    void buildSocketAuthContextFromSocket(socket).then((result) => {
+      if (!result.ok) {
+        logger.warn(
+          {
+            reason: result.reason,
+            ip: socket.handshake.address,
+          },
+          'Socket.IO connection rejected',
+        );
+        next(new Error(`connection rejected: ${result.reason}`));
+        return;
+      }
+
+      socket.data.authContext = result.authContext;
+      next();
+    }).catch((error) => {
+      logger.warn({ error: (error as Error).message, ip: socket.handshake.address }, 'Socket.IO authentication failed');
+      next(new Error('connection rejected: auth_invalid'));
+    });
+  });
+
+  io.on('connection', (socket) => {
+    const auth = socket.data.authContext;
+
+    logger.info(
+      {
+        userId: auth.userId,
+        role: auth.role,
+        deviceId: auth.deviceId,
+        ip: socket.handshake.address,
+      },
+      'Socket.IO client connected',
+    );
+
+    socket.join('frontend');
+    socket.emit('init', realtimeService.getState());
+
+    socket.on('disconnect', (reason) => {
+      logger.info(
+        { userId: auth.userId, reason },
+        'Socket.IO client disconnected',
+      );
+    });
+  });
+
+  const stateUpdateHandler = (update: Record<string, unknown>) => {
+    io.to('frontend').emit('state:update', update);
+  };
+  realtimeService.on('update', stateUpdateHandler);
+  (io as any).once('close', () => realtimeService.off('update', stateUpdateHandler));
+
+  // Transmit real-time updates to connected frontend clients.
+  realtimeService.onTelemetryUpdate((payload) => {
+    io.to('frontend').emit('sensor:update', payload);
+  });
+
+  realtimeService.onCommandFeedback((feedback) => {
+    io.to('frontend').emit('command:feedback', feedback);
+  });
+}
+
+export function initializeSocketIO(
+  server: any,
+  frontendUrl: string | string[],
+): SocketIOServer {
+  const io = new SocketIOServer(server, {
     cors: {
       origin: frontendUrl,
       methods: ['GET', 'POST'],
       credentials: true,
     },
-    pingInterval: 10000,
-    pingTimeout: 5000,
+    transports: ['websocket', 'polling'],
   });
 
-  // Authentication middleware
-  io.use((socket: AuthenticatedSocket, next) => {
-    const token = socket.handshake.auth.token || socket.handshake.query.token;
-    const deviceId = socket.handshake.auth.deviceId || socket.handshake.query.deviceId;
+  registerSocketHooks(io, frontendUrl);
 
-    if (deviceId) {
-      // ESP32 device authentication
-      socket.deviceId = deviceId as string;
-      socket.role = 'device';
-      socket.userId = `device-${deviceId}`;
-      logger.info({ deviceId }, 'ESP32 device connected');
-      return next();
-    }
+  logger.info({ frontendUrl }, 'Socket.IO initialized');
 
-    if (token) {
-      // JWT validation would go here
-      // For now, accept any token in dev
-      socket.userId = `user-${Date.now()}`;
-      socket.role = 'operator';
-      return next();
-    }
-
-    // Anonymous dashboard connection: default to 'operator' so the Command
-    // Center works without a login system (competition-internal deployment).
-    // Clients may explicitly request read-only access via auth.role='viewer'.
-    const requestedRole = (socket.handshake.auth.role ?? socket.handshake.query.role) as string | undefined;
-    socket.userId = `user-${Date.now()}`;
-    socket.role = requestedRole === 'viewer' ? 'viewer' : 'operator';
-    next();
-  });
-
-  io.on('connection', (socket: AuthenticatedSocket) => {
-    connectedClients.set(socket.id, socket);
-    logger.info({ socketId: socket.id, role: socket.role, userId: socket.userId }, 'Client connected');
-
-    // Send initial state
-    const state = realtimeService.getState();
-    socket.emit('init', state);
-
-    // Subscribe to real-time updates
-    const unsubscribers: (() => void)[] = [];
-
-    const subscribeTo = (key: string) => {
-      const unsub = realtimeService.subscribe(key, (update) => {
-        socket.emit(key, update);
-      });
-      unsubscribers.push(unsub);
-    };
-
-    subscribeTo('sensorData');
-    subscribeTo('system');
-    subscribeTo('commands');
-    subscribeTo('commandResults');
-    subscribeTo('aiSuggestions');
-
-    // Command handling
-    socket.on('command', async (command: Pick<Command, 'target' | 'action' | 'mode'>, ack) => {
-      try {
-        if (socket.role === 'viewer') {
-          ack?.({ success: false, error: 'Viewers cannot send commands' });
-          return;
-        }
-        const parsed = socketCommandSchema.safeParse(command);
-        if (!parsed.success) {
-          ack?.({ success: false, error: 'Invalid command', details: parsed.error.flatten() });
-          return;
-        }
-        const commandId = await realtimeService.sendCommand(parsed.data);
-        ack?.({ success: true, commandId });
-        logger.info({ socketId: socket.id, commandId, ...parsed.data }, 'Command executed via socket');
-      } catch (error) {
-        ack?.({ success: false, error: (error as Error).message });
-      }
-    });
-
-    // Suggestion approval
-    socket.on('approveSuggestion', async (suggestionId: string, ack) => {
-      try {
-        if (socket.role === 'viewer') {
-          ack?.({ success: false, error: 'Viewers cannot approve suggestions' });
-          return;
-        }
-        await realtimeService.approveSuggestion(suggestionId);
-        ack?.({ success: true });
-        logger.info({ socketId: socket.id, suggestionId }, 'Suggestion approved');
-      } catch (error) {
-        ack?.({ success: false, error: (error as Error).message });
-      }
-    });
-
-    socket.on('rejectSuggestion', async (suggestionId: string, ack) => {
-      try {
-        if (socket.role === 'viewer') {
-          ack?.({ success: false, error: 'Viewers cannot reject suggestions' });
-          return;
-        }
-        await realtimeService.rejectSuggestion(suggestionId);
-        ack?.({ success: true });
-        logger.info({ socketId: socket.id, suggestionId }, 'Suggestion rejected');
-      } catch (error) {
-        ack?.({ success: false, error: (error as Error).message });
-      }
-    });
-
-    // Device telemetry ingestion (from ESP32)
-    socket.on('telemetry', (data: any, ack) => {
-      if (socket.role !== 'device') {
-        ack?.({ success: false, error: 'Only devices can send telemetry' });
-        return;
-      }
-      // Process and validate telemetry
-      realtimeService.emit('telemetry', { deviceId: socket.deviceId, data, timestamp: Date.now() });
-      ack?.({ success: true });
-    });
-
-    // Manual relay control
-    socket.on('relayControl', async (data: { state: 'ON' | 'OFF'; reason: string }, ack) => {
-      try {
-        if (socket.role === 'viewer') {
-          ack?.({ success: false, error: 'Viewers cannot control relay' });
-          return;
-        }
-        if (!data || !['ON', 'OFF'].includes(data.state)) {
-          ack?.({ success: false, error: 'Invalid relay state' });
-          return;
-        }
-        const commandId = await realtimeService.sendCommand({
-          target: 'pump',
-          action: data.state,
-          mode: 'MANUAL',
-        });
-        ack?.({ success: true, commandId });
-      } catch (error) {
-        ack?.({ success: false, error: (error as Error).message });
-      }
-    });
-
-    // Buzzer control
-    socket.on('buzzerControl', async (data: { action: 'MUTE' | 'UNMUTE' }, ack) => {
-      try {
-        if (socket.role === 'viewer') {
-          ack?.({ success: false, error: 'Viewers cannot control buzzer' });
-          return;
-        }
-        if (!data || !['MUTE', 'UNMUTE'].includes(data.action)) {
-          ack?.({ success: false, error: 'Invalid buzzer action' });
-          return;
-        }
-        const commandId = await realtimeService.sendCommand({
-          target: 'buzzer',
-          action: data.action,
-          mode: 'MANUAL',
-        });
-        ack?.({ success: true, commandId });
-      } catch (error) {
-        ack?.({ success: false, error: (error as Error).message });
-      }
-    });
-
-    // Subscribe/unsubscribe to specific data streams
-    socket.on('subscribe', (streams: string[]) => {
-      streams.forEach(stream => {
-        if (!['sensorData', 'system', 'commands', 'commandResults', 'aiSuggestions', 'telemetry'].includes(stream)) return;
-        const unsub = realtimeService.subscribe(stream, (update) => {
-          socket.emit(stream, update);
-        });
-        unsubscribers.push(unsub);
-      });
-    });
-
-    socket.on('unsubscribe', (_streams: string[]) => {
-      // Handled by returning cleanup functions
-    });
-
-    socket.on('disconnect', (reason) => {
-      connectedClients.delete(socket.id);
-      unsubscribers.forEach(unsub => unsub());
-      logger.info({ socketId: socket.id, reason }, 'Client disconnected');
-    });
-
-    socket.on('error', (error) => {
-      logger.error({ socketId: socket.id, err: error }, 'Socket error');
-    });
-  });
-
-  // Broadcast helper for server-side events
-  io.broadcastState = (key: string, data: any) => {
-    io.emit(key, { [key]: data });
-  };
-
-  io.getConnectedCount = () => connectedClients.size;
-  io.getClientsByRole = (role: string) => Array.from(connectedClients.values()).filter(s => s.role === role);
-
-  logger.info('Socket.IO server initialized');
   return io;
-}
-
-declare module 'socket.io' {
-  interface Server {
-    broadcastState: (key: string, data: any) => void;
-    getConnectedCount: () => number;
-    getClientsByRole: (role: string) => AuthenticatedSocket[];
-  }
 }

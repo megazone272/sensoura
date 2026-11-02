@@ -7,9 +7,12 @@ vi.mock('socket.io-client', () => ({
   io: vi.fn(() => ({
     connected: true,
     id: 'test-socket-id',
+    auth: {},
+    io: { on: vi.fn() },
     on: vi.fn(),
     off: vi.fn(),
     emit: vi.fn(),
+    connect: vi.fn(),
     disconnect: vi.fn(),
   })),
 }));
@@ -58,9 +61,10 @@ describe('SensorStore', () => {
   });
 
   describe('connect', () => {
-    it('should set connecting true during connection', () => {
-      useSensorStore.getState().connect();
+    it('should set connecting true during connection', async () => {
+      const connecting = useSensorStore.getState().connect();
       expect(useSensorStore.getState().connecting).toBe(true);
+      await connecting;
     });
 
     // Note: Full connection test requires running server
@@ -125,7 +129,7 @@ describe('SensorStore', () => {
         status: 'online',
         lastSeen: Date.now(),
         deviceId: 'test',
-        relay: { mode: 'AUTO', state: 'ON', reason: 'test', lastAction: Date.now() },
+        relay: { mode: 'AUTO', state: 'ON', reason: 'manual', lastAction: Date.now() },
         buzzer: { muted: false },
         leds: { green: true, red: false },
       };

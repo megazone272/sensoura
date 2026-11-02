@@ -2,6 +2,13 @@ import { readFileSync } from 'fs';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { initializeFirebase, isFirebaseEnabled, getRestClient, mockDb } from '../src/services/firebase.js';
+
+// When Firebase is not configured, push-schema uses an in-memory mock so the
+// schema push and test-data seeding can still run locally.
+if (!isFirebaseEnabled()) {
+  // eslint-disable-next-line no-opinion-in-tests
+  mockDb.set('/Sensoura/testData', { present: false });
+}
 import { getLogger } from '../src/utils/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);

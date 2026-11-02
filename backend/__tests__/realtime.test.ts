@@ -50,6 +50,59 @@ describe('Realtime Service', () => {
     expect(typeof suggestions).toBe('object');
   });
 
+  it('does not execute expired suggestions', async () => {
+    const id = realtimeService.addAISuggestion({
+      type: 'irrigation',
+      suggestion: 'Expired irrigation recommendation',
+      reason: 'The sensor reading is stale',
+      recommendedAction: { target: 'pump', action: 'ON', mode: 'MANUAL' },
+      status: 'pending',
+      requiresApproval: true,
+      confidence: 0.9,
+      createdAt: Date.now() - 5000,
+      expiresAt: Date.now() - 1000,
+    });
+
+    await expect(realtimeService.approveSuggestion(id)).rejects.toThrow('expired');
+    expect(realtimeService.getAISuggestions()[id].status).toBe('expired');
+  });
+
+  it('does not queue the same suggestion command twice', async () => {
+    const id = realtimeService.addAISuggestion({
+      type: 'irrigation',
+      suggestion: 'Irrigate',
+      reason: 'Soil moisture is low',
+      recommendedAction: { target: 'pump', action: 'ON', mode: 'MANUAL' },
+      status: 'pending',
+      requiresApproval: true,
+      confidence: 0.9,
+      createdAt: Date.now(),
+      expiresAt: Date.now() + 60_000,
+    });
+
+    await realtimeService.approveSuggestion(id);
+    await expect(realtimeService.approveSuggestion(id)).rejects.toThrow('already executed');
+  });
+
+  it('does not coerce an unsupported recommendation into a device command', async () => {
+    const commandCount = Object.keys(realtimeService.getCommands()).length;
+    const id = realtimeService.addAISuggestion({
+      type: 'environment',
+      suggestion: 'Check gas sensor readings',
+      reason: 'VOC level is approaching the warning threshold',
+      recommendedAction: { target: 'gasSensor', action: 'CHECK_SENSOR', mode: null },
+      status: 'pending',
+      requiresApproval: true,
+      confidence: 0.88,
+      createdAt: Date.now(),
+      expiresAt: Date.now() + 60_000,
+    });
+
+    await realtimeService.approveSuggestion(id);
+    expect(realtimeService.getAISuggestions()[id].status).toBe('approved');
+    expect(Object.keys(realtimeService.getCommands())).toHaveLength(commandCount);
+  });
+
   it('should stop and restart listeners', () => {
     realtimeService.stopListening();
     realtimeService.startListening();

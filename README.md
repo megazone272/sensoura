@@ -130,6 +130,8 @@ An end-to-end IoT system for monitoring and controlling agricultural environment
 
 ### Option 1: Docker (Recommended)
 
+Before a live deployment, follow the [security hardening checklist](docs/security-hardening.md) and [container runbook](docker/SECURITY.md).
+
 ```bash
 # Clone/navigate to project
 cd D:\sensoura
@@ -137,20 +139,25 @@ cd D:\sensoura
 # Copy environment files
 cp backend/.env.example backend/.env
 
-# Start all services
-docker-compose up -d
+# Before starting, configure backend/.env and follow docker/SECURITY.md to create
+# the local Mosquitto password file and export the required runtime secrets.
 
-# With monitoring (Grafana + Prometheus)
-docker-compose --profile monitoring up -d
+# Choose ONE frontend profile: local Vite development or production Nginx.
+docker compose --profile development up -d
+# Alternatively: docker compose --profile production up -d
+
+# Production frontend plus optional monitoring (set Grafana credentials first)
+# docker compose --profile production --profile monitoring up -d
 
 # Check health
 ./scripts/health-check.sh --verbose
 ```
 
 Access:
-- Dashboard: http://localhost:5173
-- Backend API: http://localhost:3000
-- Grafana: http://localhost:3001 (admin/sensoura2024)
+- Development dashboard: http://localhost:5173
+- Production frontend behind an external TLS reverse proxy: http://127.0.0.1:8080
+- Backend API (local diagnostics only): http://127.0.0.1:3000
+- Grafana (monitoring profile, configure a unique admin credential first): http://127.0.0.1:3001
 - Prometheus: http://localhost:9090
 
 ### Option 2: Manual
@@ -162,8 +169,9 @@ Access:
 cd backend
 npm install --ignore-scripts
 cp .env.example .env
-# Edit .env with your Firebase credentials — or just drop the service account
-# JSON in backend/serviceAccountKey.json (auto-detected, no env vars needed)
+# Fill backend/.env with your Firebase Admin credentials. The backend reads
+# process.env; export the values in your shell/secret manager before this command.
+set -a && . ./.env && set +a
 npm run dev
 
 # Frontend (new terminal)
@@ -176,11 +184,8 @@ npm run dev
 cd backend
 npm rebuild @tensorflow/tfjs-node --build-from-source
 
-# Redis (new terminal)
-docker run -p 6379:6379 redis:alpine
-
-# MQTT (new terminal)
-docker run -p 1883:1883 eclipse-mosquitto
+# Redis and MQTT are internal Compose services. Do not publish unauthenticated
+# standalone instances; use the loopback-bound configuration in docker/SECURITY.md.
 ```
 
 ---
@@ -354,12 +359,14 @@ pio run -t upload
 pio device monitor
 ```
 
-### Firebase Integration
-The ESP32 connects to Firebase Realtime Database:
-- **Reads**: `/Sensoura/commands/*` - Execute commands
-- **Writes**: `/Sensoura/sensorData/*` - Publish readings
-- **Writes**: `/Sensoura/system/*` - Update device status
-- **Writes**: `/Sensoura/commandResults/*` - Report execution
+### Authenticated API transport
+The ESP32 never connects directly to Firebase and never falls back to `/testData`.
+It sends validated telemetry, polls device-scoped commands, and reports command
+results through the backend HTTPS API using a unique device bearer token. Copy
+`firmware/include/secrets.h.example` to the ignored `firmware/include/secrets.h`
+and configure its HTTPS origin, trusted TLS root CA, `DEVICE_ID`, and
+`DEVICE_AUTH_TOKEN` to match the ignored `backend/.env`. See the
+[container security instructions](docker/SECURITY.md).
 
 ---
 
@@ -367,38 +374,64 @@ The ESP32 connects to Firebase Realtime Database:
 
 ### 1. Create Project
 1. Go to [Firebase Console](https://console.firebase.google.com)
-2. Create new project: `on-an-official-mission`
+2. Create or select your project and note its exact project ID and database URL.
 3. Enable Realtime Database (europe-west1 region)
 
-### 2. Enable Anonymous Auth
-1. Authentication → Sign-in method
-2. Enable Anonymous authentication
+### 2. Configure user authentication
+1. Authentication → Sign-in method → enable **Email/Password** and **Google**.
+2. Enable **GitHub** in the same provider list. Create a GitHub OAuth App and
+   set its callback to the exact Firebase OAuth redirect URI shown in the
+   provider settings. Keep the GitHub Client Secret in Firebase Console only.
+3. Public Email/Password, Google and GitHub accounts receive read-only `viewer` access
+   when no role claim is set. Other roleless Firebase providers are rejected;
+   Viewers cannot control devices.
+4. Assign `admin` or `operator` claims only through trusted Firebase Admin code.
+   Never assign roles from the browser. See [Firebase Auth setup](docs/firebase-auth.md).
+5. Set `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, and
+   `VITE_FIREBASE_PROJECT_ID` in `frontend/.env.local` for local development
+   and as build-time variables for production. These are public Web app values,
+   not service-account credentials; Firebase Admin credentials stay backend-only.
+6. Add the local hostname (`127.0.0.1` or `localhost`, whichever you use) and
+   production hostname to Firebase Authentication's **Authorized domains**.
+7. Email/Password registration uses Firebase's email address verification link.
+   Users must click the link and sign in again before they can access the
+   dashboard. No Resend key or custom sender domain is needed for this flow.
+   Google/GitHub use their provider-verified
+   email. See the Firebase Auth setup guide for details.
 
 ### 3. Database Rules
 ```json
 {
   "rules": {
     ".read": false,
-    ".write": false,
-    "testData": {
-      ".read": "true",
-      ".write": "true"
-    }
+    ".write": false
   }
 }
 ```
+The backend uses Firebase Admin credentials and enforces user roles on its own
+API; Admin SDK operations bypass Realtime Database rules. Keep rules locked for
+direct clients, and use the Firebase Rules Simulator to test the actual
+production database before rollout. Never make `/testData` or production data
+publicly readable or writable.
 
 ### 4. Generate Service Account Key
 1. Project Settings → Service accounts
-2. Generate new private key
-3. Save as `backend/serviceAccountKey.json`
-4. Update `backend/.env`:
+2. Create a new service-account credential
+3. Save the downloaded JSON in a protected location; never commit it.
+4. For the recommended Compose setup, provide the service-account email/private
+   key and database URL through the ignored backend environment or a managed
+   secret store. If you use a JSON file instead, mount it read-only into the
+   container and set `FIREBASE_SERVICE_ACCOUNT_PATH` to the mounted path.
+   Update `backend/.env` with the project id, client email and database URL:
 ```env
-FIREBASE_PROJECT_ID=on-an-official-mission
-FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxxxx@on-an-official-mission.iam.gserviceaccount.com
-FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
-FIREBASE_DATABASE_URL=https://on-an-official-mission-default-rtdb.europe-west1.firebasedatabase.app
+FIREBASE_PROJECT_ID=your-project-id
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxxxx@your-project-id.iam.gserviceaccount.com
+FIREBASE_DATABASE_URL=https://your-project-id-default-rtdb.europe-west1.firebasedatabase.app
 ```
+
+If the JSON file cannot be shipped with the deployment, copy the credential
+from it into `.env` following the commented template in `backend/.env.example`.
+Real credentials are never committed to this repository.
 
 ### 5. Initial Data Structure
 ```json

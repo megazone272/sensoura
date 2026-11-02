@@ -20,6 +20,12 @@ beforeAll(() => {
 });
 
 describe('API Endpoints', () => {
+  it('uses the same-origin API path when no remote API URL is configured', () => {
+    if (!window.location.hostname.includes('github.io') && !import.meta.env.VITE_API_URL) {
+      expect(api.defaults.baseURL).toBe('/api');
+    }
+  });
+
   it('should have all required endpoints defined', () => {
     // Verify endpoints exist and are functions
     expect(typeof endpoints.getState).toBe('function');

@@ -1,0 +1,22 @@
+# Firebase / GCloud service account credentials
+# Do not commit private keys, key files, or env-specific credential paths.
+# Local development may still use these files when the appropriate env vars
+# are not set; that fallback is intentional for now.
+**/serviceAccountKey.json
+**/service-account-credentials.json
+**/firebase-service-account.json
+**/adc-credentials.json
+.env
+.env.local
+.env.*.local
+.env.*.production
+
+# IDE / editor artifacts
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS artifacts
+.DS_Store
+Thumbs.db

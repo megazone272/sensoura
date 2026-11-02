@@ -1,245 +1,126 @@
-import { useState, useEffect } from 'react';
-import {
-  Terminal,
-  Power,
-  Volume2,
-  VolumeX,
-  RotateCcw,
-  AlertTriangle,
-  CheckCircle,
-  XCircle,
-  Clock,
-  Play,
-  Square,
-} from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
+import { useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, CheckCircle2, Clock3, Loader2, Power, RotateCcw, Terminal, Volume2, VolumeX, XCircle } from 'lucide-react';
+import { trackEvent } from '@services/analytics';
+import { hasControlAccessHint } from '@services/authToken';
 import { useCommands, useCommandResults, useConnection, useSensorStore } from '@store/sensorStore';
+import type { CommandResult } from '@shared/types';
+import { useLanguage } from '@contexts/LanguageContext';
+import { getBackendHealth, getBackendMode } from '@services/backendHealth';
+import { safeDate, validTimestamp } from '@services/telemetry';
+
+type Tab = 'pump' | 'buzzer' | 'system';
+type HistoryRow = { id: string; target: string; action: string; timestamp: number | null; status: 'pending' | 'executed' | 'failed' | 'timeout'; result?: CommandResult };
+
+function StatusIcon({ status }: { status: HistoryRow['status'] }) {
+  if (status === 'executed') return <CheckCircle2 size={15} className="text-[var(--accent-primary)]" />;
+  if (status === 'failed') return <XCircle size={15} className="text-[var(--accent-danger)]" />;
+  if (status === 'timeout') return <AlertTriangle size={15} className="text-[var(--accent-danger)]" />;
+  return <Clock3 size={15} className="text-[var(--accent-warning)]" />;
+}
 
 export function Commands() {
   const commands = useCommands();
-  const commandResults = useCommandResults();
+  const results = useCommandResults();
   const { connected } = useConnection();
   const { sendCommand, controlRelay, controlBuzzer } = useSensorStore();
-
-  const [activeTab, setActiveTab] = useState<'pump' | 'buzzer' | 'system'>('pump');
-  
-  const [lastMessage, setLastMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
-  const [commandHistory, setCommandHistory] = useState<Array<{
-    id: string;
-    target: string;
-    action: string;
-    timestamp: number;
-    status: string;
-  }>>([]);
+  const { language, t } = useLanguage();
+  const canControl = hasControlAccessHint();
+  const [tab, setTab] = useState<Tab>('pump');
+  const [busy, setBusy] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<'REBOOT' | 'CALIBRATE' | null>(null);
+  const [activeCommandId, setActiveCommandId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [backendMode, setBackendMode] = useState<'sdk' | 'mock' | 'unknown'>('unknown');
+  const locale = language === 'ar' ? 'ar-EG' : 'en-US';
+  const activeResult = activeCommandId ? results[activeCommandId] : undefined;
 
   useEffect(() => {
-    // Convert commands and results to history
-    const entries = Object.entries(commandResults).map(([id, result]) => ({
-      id,
-      target: result.target,
-      action: result.requestedAction,
-      timestamp: result.timestamp,
-      status: result.status,
-    }));
-    setCommandHistory(entries.sort((a, b) => b.timestamp - a.timestamp));
-  }, [commandResults]);
+    let active = true;
+    void getBackendHealth().then((health) => {
+      if (!active) return;
+      setBackendMode(getBackendMode(health));
+    }).catch(() => { if (active) setBackendMode('unknown'); });
+    return () => { active = false; };
+  }, []);
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'executed': return <CheckCircle className="w-4 h-4 text-[var(--accent-primary)]" />;
-      case 'failed': return <XCircle className="w-4 h-4 text-[var(--accent-danger)]" />;
-      case 'pending': return <Clock className="w-4 h-4 text-[var(--accent-warning)]" />;
-      default: return <AlertTriangle className="w-4 h-4 text-[var(--text-muted)]" />;
+  const rows = useMemo<HistoryRow[]>(() => {
+    const resultById = new Map<string, CommandResult>();
+    for (const [key, result] of Object.entries(results)) resultById.set(result.commandId || key, result);
+    const merged = new Map<string, HistoryRow>();
+    for (const [key, command] of Object.entries(commands)) {
+      const id = command.id || key;
+      const result = resultById.get(id);
+      merged.set(id, {
+        id,
+        target: result?.target || command.target,
+        action: result?.requestedAction || command.action,
+        timestamp: validTimestamp(result?.timestamp ?? command.timestamp),
+        status: result?.status ?? 'pending',
+        result,
+      });
+    }
+    for (const [key, result] of Object.entries(results)) {
+      const id = result.commandId || key;
+      if (!merged.has(id)) merged.set(id, { id, target: result.target, action: result.requestedAction, timestamp: validTimestamp(result.timestamp), status: result.status, result });
+    }
+    return [...merged.values()].sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0));
+  }, [commands, results]);
+
+  const runCommand = async (target: 'pump' | 'buzzer' | 'system', action: 'ON' | 'OFF' | 'MUTE' | 'UNMUTE' | 'REBOOT' | 'CALIBRATE') => {
+    if (!connected || !canControl || busy) return;
+    setBusy(true);
+    setError(null);
+    setActiveCommandId(null);
+    try {
+      let id: string;
+      if (target === 'pump') id = await controlRelay(action as 'ON' | 'OFF', 'manual');
+      else if (target === 'buzzer') id = await controlBuzzer(action as 'MUTE' | 'UNMUTE');
+      else id = await sendCommand({ target: 'system', action: action as 'REBOOT' | 'CALIBRATE', mode: 'MANUAL' });
+      setActiveCommandId(id);
+      trackEvent('device_command_sent', { target, action, mode: 'MANUAL' });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : t('commandFailed'));
+    } finally {
+      setBusy(false);
+      setConfirmAction(null);
     }
   };
 
+  const statusText = (status: HistoryRow['status']) => t(status === 'timeout' ? 'commandTimeout' : status);
+  const resultMessage = activeResult?.status === 'executed' ? t('commandExecuted')
+    : activeResult?.status === 'failed' ? activeResult.message || t('commandFailed')
+      : activeResult?.status === 'timeout' ? t('commandTimeout')
+        : activeCommandId ? t('commandQueued') : null;
+
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-2xl font-bold">Command Center</h1>
-        <p className="text-[var(--text-muted)] mt-1">
-          Send manual commands to the {connected ? 'connected' : 'offline'} device
-        </p>
-      </div>
+    <div className="space-y-7">
+      <header className="page-heading" data-motion-item><div><p className="eyebrow">DEVICE OPERATIONS</p><h1>{t('commandsTitle')}</h1><p>{t('commandsSubtitle')}</p></div><span title={t('socketStatus')} aria-label={`${t('socketStatus')}: ${connected ? t('connected') : t('disconnected')}`} className={`sensoura-status-chip ${connected ? 'is-online' : 'is-offline'}`}><span className={`status-dot ${connected ? 'online' : 'offline'}`} />{connected ? t('connected') : t('disconnected')}</span></header>
+      {backendMode !== 'sdk' && <p className="status-banner is-warning" role="status" data-motion-item><AlertTriangle size={16} />{language === 'ar' ? (backendMode === 'mock' ? 'الخادم المحلي يستخدم قاعدة mock؛ قبول الطلب لا يثبت أن الجهاز نفّذه فعليًا.' : 'لم يتم التحقق من مصدر backend؛ قبول الطلب لا يثبت أن الجهاز نفّذه فعليًا.') : (backendMode === 'mock' ? 'The backend is using a local mock database; an accepted request does not prove physical device execution.' : 'The backend source is unverified; an accepted request does not prove physical device execution.')}</p>}
 
-      {/* Command Tabs */}
-      <div className="flex gap-2">
-        <button
-          className={`btn btn-sm ${activeTab === 'pump' ? 'btn-primary' : 'btn-secondary'}`}
-          onClick={() => setActiveTab('pump')}
-        >
-          <Power className="w-4 h-4" />
-          Water Pump
-        </button>
-        <button
-          className={`btn btn-sm ${activeTab === 'buzzer' ? 'btn-primary' : 'btn-secondary'}`}
-          onClick={() => setActiveTab('buzzer')}
-        >
-          <Volume2 className="w-4 h-4" />
-          Buzzer
-        </button>
-        <button
-          className={`btn btn-sm ${activeTab === 'system' ? 'btn-primary' : 'btn-secondary'}`}
-          onClick={() => setActiveTab('system')}
-        >
-          <Terminal className="w-4 h-4" />
-          System
-        </button>
-      </div>
-
-      {/* Command Actions */}
-      <div className="grid lg:grid-cols-2 gap-6">
-        <div className="card">
-          <h3 className="text-lg font-semibold mb-4">Quick Actions</h3>
-
-          <div className="space-y-4">
-            {activeTab === 'pump' && (
-              <div className="space-y-3">
-                <p className="text-sm text-[var(--text-muted)]">Control the water pump relay</p>
-                <div className="flex gap-3">
-                  <button
-                    className="btn btn-primary flex-1"
-                    onClick={() => controlRelay('ON', 'manual').then(id => setLastMessage({ text: `Pump ON (${id})`, type: 'success' })).catch(e => setLastMessage({ text: e.message, type: 'error' }))}
-                    disabled={!connected}
-                  >
-                    <Play className="w-4 h-4" />
-                    Turn ON
-                  </button>
-                  <button
-                    className="btn btn-secondary flex-1"
-                    onClick={() => controlRelay('OFF', 'manual').then(id => setLastMessage({ text: `Pump OFF (${id})`, type: 'success' })).catch(e => setLastMessage({ text: e.message, type: 'error' }))}
-                    disabled={!connected}
-                  >
-                    <Square className="w-4 h-4" />
-                    Turn OFF
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'buzzer' && (
-              <div className="space-y-3">
-                <p className="text-sm text-[var(--text-muted)]">Control the buzzer alert</p>
-                <div className="flex gap-3">
-                  <button
-                    className="btn btn-primary flex-1"
-                    onClick={() => controlBuzzer('UNMUTE').then(id => setLastMessage({ text: `Buzzer ON (${id})`, type: 'success' })).catch(e => setLastMessage({ text: e.message, type: 'error' }))}
-                    disabled={!connected}
-                  >
-                    <Volume2 className="w-4 h-4" />
-                    Unmute
-                  </button>
-                  <button
-                    className="btn btn-secondary flex-1"
-                    onClick={() => controlBuzzer('MUTE').then(id => setLastMessage({ text: `Buzzer MUTED (${id})`, type: 'success' })).catch(e => setLastMessage({ text: e.message, type: 'error' }))}
-                    disabled={!connected}
-                  >
-                    <VolumeX className="w-4 h-4" />
-                    Mute
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'system' && (
-              <div className="space-y-3">
-                <p className="text-sm text-[var(--text-muted)]">System-level commands</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    className="btn btn-warning"
-                    onClick={() => sendCommand({ target: 'system', action: 'REBOOT', mode: 'MANUAL' }).then(id => setLastMessage({ text: `Reboot sent (${id})`, type: 'success' })).catch(e => setLastMessage({ text: e.message, type: 'error' }))}
-                    disabled={!connected}
-                  >
-                    <RotateCcw className="w-4 h-4" />
-                    Reboot
-                  </button>
-                  <button
-                    className="btn btn-secondary"
-                    onClick={() => sendCommand({ target: 'system', action: 'CALIBRATE', mode: 'MANUAL' }).then(id => setLastMessage({ text: `Calibration sent (${id})`, type: 'success' })).catch(e => setLastMessage({ text: e.message, type: 'error' }))}
-                    disabled={!connected}
-                  >
-                    <Terminal className="w-4 h-4" />
-                    Calibrate
-                  </button>
-                </div>
-              </div>
-            )}
+      <div className="commands-layout">
+        <section className="panel-card" data-motion-item>
+          <div className="section-heading compact"><div><p className="eyebrow">MANUAL REQUESTS</p><h2>{t('quickActions')}</h2></div><Terminal size={19} className="text-[var(--accent-primary)]" /></div>
+          <div className="filter-row" role="tablist" aria-label={t('commandsTitle')}>
+            {(['pump', 'buzzer', 'system'] as const).map((name) => <button key={name} role="tab" aria-selected={tab === name} className={`btn btn-sm ${tab === name ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setTab(name)}>{t(name === 'pump' ? 'tabPump' : name === 'buzzer' ? 'tabBuzzer' : 'tabSystem')}</button>)}
           </div>
+          {!canControl && <p className="status-banner is-info mb-4" role="note">{t('readOnlyNote')}</p>}
+          {tab === 'pump' && <div className="command-action-panel"><p>{t('safetyNote')}</p><div className="action-row"><button className="btn btn-primary" disabled={!connected || !canControl || busy} onClick={() => void runCommand('pump', 'ON')}><Power size={16} />{t('turnOn')}</button><button className="btn btn-danger" disabled={!connected || !canControl || busy} onClick={() => void runCommand('pump', 'OFF')}><Power size={16} />{t('turnOff')}</button></div></div>}
+          {tab === 'buzzer' && <div className="command-action-panel"><p>{language === 'ar' ? 'إرسال طلب كتم/إلغاء كتم للجرس المتصل.' : 'Send a mute/unmute request to the connected buzzer.'}</p><div className="action-row"><button className="btn btn-primary" disabled={!connected || !canControl || busy} onClick={() => void runCommand('buzzer', 'UNMUTE')}><Volume2 size={16} />{t('unmute')}</button><button className="btn btn-secondary" disabled={!connected || !canControl || busy} onClick={() => void runCommand('buzzer', 'MUTE')}><VolumeX size={16} />{t('mute')}</button></div></div>}
+          {tab === 'system' && <div className="command-action-panel"><p>{language === 'ar' ? 'تتطلب أوامر النظام تأكيدًا؛ قد ينقطع الاتصال مؤقتًا عند إعادة التشغيل.' : 'System requests require confirmation; a reboot may briefly interrupt connectivity.'}</p><div className="action-row"><button className="btn btn-secondary" disabled={!connected || !canControl || busy} onClick={() => setConfirmAction('CALIBRATE')}><Terminal size={16} />{t('calibrate')}</button><button className="btn btn-danger" disabled={!connected || !canControl || busy} onClick={() => setConfirmAction('REBOOT')}><RotateCcw size={16} />{t('reboot')}</button></div></div>}
+          {!connected && <p className="status-banner is-warning mt-4" role="status"><AlertTriangle size={15} />{t('disconnected')}</p>}
+          {error && <p className="status-banner is-danger mt-4" role="alert">{error}</p>}
+          {busy && <p className="status-banner is-info mt-4" role="status"><Loader2 size={15} className="animate-spin" />{t('connecting')}</p>}
+          {activeCommandId && resultMessage && <div className={`command-feedback mt-4 ${activeResult?.status === 'failed' || activeResult?.status === 'timeout' ? 'is-danger' : activeResult?.status === 'executed' ? 'is-success' : ''}`} role="status"><span className="mono text-xs">{activeCommandId}</span><span>{resultMessage}</span></div>}
+        </section>
 
-          {lastMessage && (
-            <div className={`mt-4 p-3 rounded-xl ${lastMessage.type === 'success' ? 'bg-[var(--accent-primary)]/10 text-[var(--accent-primary)]' : 'bg-[var(--accent-danger)]/10 text-[var(--accent-danger)]'}`}>
-              <p className="text-sm font-medium">{lastMessage.text}</p>
-            </div>
-          )}
-        </div>
-
-        {/* Command History */}
-        <div className="card">
-          <h3 className="text-lg font-semibold mb-4">Command History</h3>
-          <div className="table-container max-h-96 overflow-y-auto">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Time</th>
-                  <th>Target</th>
-                  <th>Action</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {commandHistory.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="text-center text-[var(--text-muted)] py-8">
-                      No commands yet
-                    </td>
-                  </tr>
-                ) : (
-                  commandHistory.map(entry => (
-                    <tr key={entry.id}>
-                      <td className="font-mono text-sm">
-                        {formatDistanceToNow(new Date(entry.timestamp), { addSuffix: true })}
-                      </td>
-                      <td className="capitalize">{entry.target}</td>
-                      <td className="font-mono">{entry.action}</td>
-                      <td>
-                        <div className="flex items-center gap-2">
-                          {getStatusIcon(entry.status)}
-                          <span className="capitalize">{entry.status}</span>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <section className="panel-card" data-motion-item>
+          <div className="section-heading compact"><div><p className="eyebrow">REQUEST LOG</p><h2>{t('commandHistory')}</h2></div><span className="badge badge-info">{rows.length}</span></div>
+          {rows.length === 0 ? <div className="empty-state-card"><div className="empty-state-icon"><Clock3 size={20} /></div><div><h3>{t('noCommands')}</h3><p>{connected ? t('empty') : t('disconnected')}</p></div></div> : <div className="table-container command-table-wrap"><table className="table command-table"><thead><tr><th>{t('time')}</th><th>{t('target')}</th><th>{t('action')}</th><th>{t('status')}</th><th>{t('commandId')}</th></tr></thead><tbody>{rows.map((row) => <tr key={row.id}><td>{safeDate(row.timestamp)?.toLocaleString(locale) ?? t('unavailable')}</td><td className="capitalize">{row.target}</td><td className="mono">{row.action}</td><td><span className={`command-status is-${row.status}`}><StatusIcon status={row.status} />{statusText(row.status)}</span>{row.result?.message && <small className="command-row-message">{row.result.message}</small>}</td><td className="mono command-id-cell">{row.id}</td></tr>)}</tbody></table></div>}
+          <p className="microcopy mt-3">{t('safetyNote')}</p>
+        </section>
       </div>
 
-      {/* Recent Commands (from Firebase) */}
-      <div className="card">
-        <h3 className="text-lg font-semibold mb-4">Recent Commands (Firebase)</h3>
-        <div className="grid gap-2">
-          {Object.entries(commands).length === 0 ? (
-            <p className="text-[var(--text-muted)] text-center py-4">No commands in queue</p>
-          ) : (
-            Object.entries(commands).map(([id, cmd]) => (
-              <div key={id} className="flex items-center justify-between p-3 rounded-xl bg-[var(--bg-tertiary)]">
-                <div className="flex items-center gap-3">
-                  <Terminal className="w-4 h-4 text-[var(--accent-primary)]" />
-                  <div>
-                    <p className="font-medium capitalize">{cmd.target} - {cmd.action}</p>
-                    <p className="text-xs text-[var(--text-muted)]">
-                      {formatDistanceToNow(new Date(cmd.timestamp), { addSuffix: true })} • {cmd.mode}
-                    </p>
-                  </div>
-                </div>
-                <span className="badge badge-info">{cmd.mode}</span>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
+      {confirmAction && <div className="confirm-panel" role="alertdialog" aria-modal="false" aria-labelledby="system-confirm-title" data-motion-item><div className="confirm-panel-icon"><AlertTriangle size={19} /></div><div className="confirm-panel-copy"><h3 id="system-confirm-title">{t('confirmAction')}</h3><p>{t(confirmAction === 'REBOOT' ? 'confirmReboot' : 'confirmCalibrate')}</p></div><div className="confirm-panel-actions"><button className="btn btn-secondary btn-sm" onClick={() => setConfirmAction(null)} disabled={busy}>{t('cancel')}</button><button className="btn btn-danger btn-sm" onClick={() => void runCommand('system', confirmAction)} disabled={busy}>{busy ? t('connecting') : t('sendCommand')}</button></div></div>}
     </div>
   );
 }

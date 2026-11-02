@@ -5,6 +5,14 @@ import { realtimeService } from '../services/realtime.js';
 import { isFirebaseEnabled } from '../services/firebase.js';
 import { aiEngine } from '../ai/engine.js';
 import { getEnv } from '../config/env.js';
+import { registerDeviceRoutes } from './device.js';
+
+import {
+  requireAuth,
+  requireUserAuth,
+  isPrivilegedRole,
+  resolveCaptured,
+} from '../services/auth.js';
 
 const logger = getLogger('routes');
 const env = getEnv();
@@ -22,6 +30,8 @@ function notFound(message: string): Error & { statusCode: number } {
 }
 
 export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
+  registerDeviceRoutes(fastify);
+
   // Health check
   fastify.get('/health', async () => ({
     status: 'ok',
@@ -30,129 +40,199 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
     team: env.TEAM_ID,
     timestamp: Date.now(),
     uptime: process.uptime(),
-    firebase: !isFirebaseEnabled()
-      ? 'mock'
-      : realtimeService.isUsingRestFallback()
-        ? 'rest-fallback'
-        : 'sdk',
+    firebase: isFirebaseEnabled() ? 'sdk' : 'mock',
     aiBackend: aiEngine.getModelInfo().backend,
   }));
 
-  fastify.get('/ready', async () => ({
-    ready: true,
-    services: {
-      realtime: true,
-      ai: true,
-      socket: true,
-    },
-  }));
+  fastify.get('/ready', async (_request, reply) => {
+    const realtimeReady = realtimeService.isRealtimeReady();
+    const readiness = {
+      ready: realtimeReady,
+      services: {
+        realtime: realtimeReady,
+        ai: true,
+        socket: true,
+      },
+    };
+    if (!realtimeReady) return reply.code(503).send(readiness);
+    return readiness;
+  });
 
   // Current state
-  fastify.get('/api/state', async () => {
+  fastify.get('/api/state', { preHandler: [requireUserAuth] }, async () => {
     return realtimeService.getState();
   });
 
-  fastify.get('/api/sensor-data', async () => {
+  fastify.get('/api/sensor-data', { preHandler: [requireUserAuth] }, async () => {
     const data = realtimeService.getSensorData();
     if (!data) throw notFound('No sensor data available');
     return data;
   });
 
-  fastify.get('/api/system', async () => {
+  fastify.get('/api/system', { preHandler: [requireUserAuth] }, async () => {
     const data = realtimeService.getSystemStatus();
     if (!data) throw notFound('No system status available');
     return data;
   });
 
-  fastify.get('/api/commands', async () => {
+  fastify.get('/api/commands', { preHandler: [requireUserAuth] }, async () => {
     return realtimeService.getCommands();
   });
 
-  fastify.get('/api/command-results', async () => {
+  fastify.get('/api/command-results', { preHandler: [requireUserAuth] }, async () => {
     return realtimeService.getCommandResults();
   });
 
-  fastify.get('/api/ai-suggestions', async () => {
+  fastify.get('/api/ai-suggestions', { preHandler: [requireUserAuth] }, async () => {
     return realtimeService.getAISuggestions();
   });
 
   // Send command
-  fastify.post<{ Body: z.infer<typeof commandSchema> }>('/api/command', async (request, reply) => {
-    const parsed = commandSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'Invalid command', details: parsed.error.flatten() });
-    }
+  fastify.post<{ Body: z.infer<typeof commandSchema> }>(
+    '/api/command',
+    { preHandler: [requireAuth] },
+    async (request, reply) => {
+      const auth = resolveCaptured(request);
 
-    try {
-      const commandId = await realtimeService.sendCommand(parsed.data);
-      return { success: true, commandId };
-    } catch (error) {
-      logger.error({ err: error }, 'Failed to send command');
-      return reply.code(500).send({ error: 'Failed to send command' });
-    }
-  });
+      if (!isPrivilegedRole(auth.role)) {
+        return reply.code(403).send({
+          error: 'Forbidden',
+          message: 'Only operators and admins can send commands',
+        });
+      }
+
+      const parsed = commandSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({ error: 'Invalid command', details: parsed.error.flatten() });
+      }
+
+      try {
+        const commandId = await realtimeService.sendCommand(parsed.data);
+        return { success: true, commandId };
+      } catch (error) {
+        logger.error({ err: error, by: auth.userId }, 'Failed to send command');
+        return reply.code(500).send({ error: 'Failed to send command' });
+      }
+    },
+  );
 
   // Approve/reject AI suggestion
-  fastify.post<{ Params: { id: string } }>('/api/ai-suggestions/:id/approve', async (request, reply) => {
-    try {
-      await realtimeService.approveSuggestion(request.params.id);
-      return { success: true };
-    } catch (error) {
-      logger.error({ err: error, suggestionId: request.params.id }, 'Failed to approve suggestion');
-      return reply.code(500).send({ error: 'Failed to approve suggestion' });
-    }
-  });
+  fastify.post<{ Params: { id: string } }>(
+    '/api/ai-suggestions/:id/approve',
+    { preHandler: [requireAuth] },
+    async (request, reply) => {
+      const auth = resolveCaptured(request);
 
-  fastify.post<{ Params: { id: string } }>('/api/ai-suggestions/:id/reject', async (request, reply) => {
-    try {
-      await realtimeService.rejectSuggestion(request.params.id);
-      return { success: true };
-    } catch (error) {
-      logger.error({ err: error, suggestionId: request.params.id }, 'Failed to reject suggestion');
-      return reply.code(500).send({ error: 'Failed to reject suggestion' });
-    }
-  });
+      if (!isPrivilegedRole(auth.role)) {
+        return reply.code(403).send({
+          error: 'Forbidden',
+          message: 'Only operators and admins can approve suggestions',
+        });
+      }
+
+      try {
+        await realtimeService.approveSuggestion(request.params.id);
+        logger.info({ suggestionId: request.params.id, by: auth.userId }, 'Suggestion approved');
+        return { success: true };
+      } catch (error) {
+        logger.error({ err: error, suggestionId: request.params.id, by: auth.userId }, 'Failed to approve suggestion');
+        return reply.code(500).send({ error: 'Failed to approve suggestion' });
+      }
+    },
+  );
+
+  fastify.post<{ Params: { id: string } }>(
+    '/api/ai-suggestions/:id/reject',
+    { preHandler: [requireAuth] },
+    async (request, reply) => {
+      const auth = resolveCaptured(request);
+
+      if (!isPrivilegedRole(auth.role)) {
+        return reply.code(403).send({
+          error: 'Forbidden',
+          message: 'Only operators and admins can reject suggestions',
+        });
+      }
+
+      try {
+        await realtimeService.rejectSuggestion(request.params.id);
+        logger.info({ suggestionId: request.params.id, by: auth.userId }, 'Suggestion rejected');
+        return { success: true };
+      } catch (error) {
+        logger.error({ err: error, suggestionId: request.params.id, by: auth.userId }, 'Failed to reject suggestion');
+        return reply.code(500).send({ error: 'Failed to reject suggestion' });
+      }
+    },
+  );
 
   // Manual relay control
-  fastify.post<{ Body: { state: 'ON' | 'OFF'; reason: string } }>('/api/relay', async (request, reply) => {
-    const { state, reason } = request.body;
-    if (!['ON', 'OFF'].includes(state)) {
-      return reply.code(400).send({ error: 'Invalid state' });
-    }
+  fastify.post<{ Body: { state: 'ON' | 'OFF'; reason: string } }>(
+    '/api/relay',
+    { preHandler: [requireAuth] },
+    async (request, reply) => {
+      const auth = resolveCaptured(request);
 
-    try {
-      const commandId = await realtimeService.sendCommand({
-        target: 'pump',
-        action: state,
-        mode: 'MANUAL',
-      });
-      return { success: true, commandId, reason };
-    } catch (error) {
-      return reply.code(500).send({ error: 'Failed to control relay' });
-    }
-  });
+      if (!isPrivilegedRole(auth.role)) {
+        return reply.code(403).send({
+          error: 'Forbidden',
+          message: 'Only operators and admins can control the relay',
+        });
+      }
+
+      const { state, reason } = request.body;
+      if (!['ON', 'OFF'].includes(state)) {
+        return reply.code(400).send({ error: 'Invalid state' });
+      }
+
+      try {
+        const commandId = await realtimeService.sendCommand({
+          target: 'pump',
+          action: state,
+          mode: 'MANUAL',
+        });
+        return { success: true, commandId, reason };
+      } catch (error) {
+        logger.error({ err: error, by: auth.userId }, 'Failed to control relay');
+        return reply.code(500).send({ error: 'Failed to control relay' });
+      }
+    },
+  );
 
   // Buzzer control
-  fastify.post<{ Body: { action: 'MUTE' | 'UNMUTE' } }>('/api/buzzer', async (request, reply) => {
-    const { action } = request.body;
-    if (!['MUTE', 'UNMUTE'].includes(action)) {
-      return reply.code(400).send({ error: 'Invalid action' });
-    }
+  fastify.post<{ Body: { action: 'MUTE' | 'UNMUTE' } }>(
+    '/api/buzzer',
+    { preHandler: [requireAuth] },
+    async (request, reply) => {
+      const auth = resolveCaptured(request);
 
-    try {
-      const commandId = await realtimeService.sendCommand({
-        target: 'buzzer',
-        action,
-        mode: 'MANUAL',
-      });
-      return { success: true, commandId };
-    } catch (error) {
-      return reply.code(500).send({ error: 'Failed to control buzzer' });
-    }
-  });
+      if (!isPrivilegedRole(auth.role)) {
+        return reply.code(403).send({
+          error: 'Forbidden',
+          message: 'Only operators and admins can control the buzzer',
+        });
+      }
+
+      const { action } = request.body;
+      if (!['MUTE', 'UNMUTE'].includes(action)) {
+        return reply.code(400).send({ error: 'Invalid action' });
+      }
+
+      try {
+        const commandId = await realtimeService.sendCommand({
+          target: 'buzzer',
+          action,
+          mode: 'MANUAL',
+        });
+        return { success: true, commandId };
+      } catch (error) {
+        logger.error({ err: error, by: auth.userId }, 'Failed to control buzzer');
+        return reply.code(500).send({ error: 'Failed to control buzzer' });
+      }
+    },
+  );
 
   // AI predictions endpoint
-  fastify.get('/api/ai/predictions', async () => {
+  fastify.get('/api/ai/predictions', { preHandler: [requireUserAuth] }, async () => {
     const sensorData = realtimeService.getSensorData();
     if (!sensorData) throw notFound('No sensor data for predictions');
 
@@ -168,70 +248,136 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   });
 
   // AI model info
-  fastify.get('/api/ai/model-info', async () => {
+  fastify.get('/api/ai/model-info', { preHandler: [requireUserAuth] }, async () => {
     return aiEngine.getModelInfo();
   });
 
   // Trigger model retraining (admin only)
-  fastify.post('/api/ai/retrain', async () => {
-    // In production, add admin auth check
-    logger.info('Manual retrain triggered');
-    // Would trigger background job
-    return { success: true, message: 'Retraining queued' };
-  });
+  fastify.post(
+    '/api/ai/retrain',
+    { preHandler: [requireAuth] },
+    async (request, reply) => {
+      const auth = resolveCaptured(request);
+
+      if (!isPrivilegedRole(auth.role)) {
+        return reply.code(403).send({
+          error: 'Forbidden',
+          message: 'Only operators and admins can trigger retraining',
+        });
+      }
+
+      logger.info({ by: auth.userId }, 'Manual retrain triggered');
+      return { success: true, message: 'Retraining queued' };
+    },
+  );
 
   // Historical data (would query Firebase/Time-series DB)
-  fastify.get('/api/history/sensor-data', async (request) => {
+  fastify.get('/api/history/sensor-data', { preHandler: [requireUserAuth] }, async (request) => {
     const { limit = '100' } = request.query as { limit?: string };
-    // Mock historical data
+
+    const isDevMockEnabled = env.NODE_ENV === 'development';
+
+    if (!isDevMockEnabled) {
+      return {
+        data: [],
+        count: 0,
+        note: 'Historical sensor history is not available in this deployment. Persistent historical storage must be enabled before this endpoint returns real values.',
+      };
+    }
+
+    const count = Math.min(parseInt(limit, 10) || 0, 100);
+    if (count <= 0) return { data: [], count: 0, note: 'No historical sensor data available yet.' };
+
     const now = Date.now();
-    const count = Math.min(parseInt(limit), 500);
+    const base = realtimeService.getSensorData();
+    if (!base) {
+      return {
+        data: [],
+        count: 0,
+        note: 'No current sensor data available; historical data cannot be generated yet.',
+      };
+    }
+
     const data = Array.from({ length: count }, (_, i) => ({
-      AirTemp: 28.4 + (Math.random() - 0.5) * 5,
-      SoilTemp: 22.5 + (Math.random() - 0.5) * 3,
-      AirHumidity: 65 + (Math.random() - 0.5) * 10,
-      SoilMoisture: Math.max(0, Math.min(100, 24 + (Math.random() - 0.5) * 20)),
-      VOC: 185 + Math.floor((Math.random() - 0.5) * 50),
-      Light: 720 + Math.floor((Math.random() - 0.5) * 200),
-      Barometricpressure: 1013.25 + (Math.random() - 0.5) * 10,
-      timestamp: now - (count - i) * 300000, // 5 min intervals
+      AirTemp: base.AirTemp + (Math.round((Math.random() - 0.5) * 5 * 10) / 10),
+      SoilTemp: base.SoilTemp + (Math.round((Math.random() - 0.5) * 3 * 10) / 10),
+      AirHumidity: base.AirHumidity + Math.round((Math.random() - 0.5) * 10),
+      SoilMoisture: Math.max(0, Math.min(100, Math.round(base.SoilMoisture + (Math.random() - 0.5) * 20))),
+      VOC: Math.max(0, Math.round(base.VOC + (Math.random() - 0.5) * 50)),
+      Light: Math.max(0, Math.round(base.Light + (Math.random() - 0.5) * 200)),
+      Barometricpressure: base.Barometricpressure + (Math.round((Math.random() - 0.5) * 10 * 100) / 100),
+      timestamp: now - (count - i) * 300000,
     }));
-    return { data, count };
+
+    return {
+      data,
+      count,
+      note: 'This endpoint is unavailable in production. Historical greenhouse sensor data requires a configured persistent store (for example Firebase) before it returns real values. During development, when no persistent store was configured, this endpoint returns a short, bounded placeholder batch generated from the current sensor state so the frontend can still render a chart; those values are not real historical sensor data and must not be interpreted as persisting history.',
+    };
   });
 
   // System control
-  fastify.post('/api/system/reboot', async (request, reply) => {
-    try {
-      const commandId = await realtimeService.sendCommand({
-        target: 'system',
-        action: 'REBOOT',
-        mode: 'MANUAL',
-      });
-      return { success: true, commandId };
-    } catch (error) {
-      return reply.code(500).send({ error: 'Failed to send reboot command' });
-    }
-  });
+  fastify.post(
+    '/api/system/reboot',
+    { preHandler: [requireAuth] },
+    async (request, reply) => {
+      const auth = resolveCaptured(request);
 
-  fastify.post('/api/system/calibrate', async (request, reply) => {
-    try {
-      const commandId = await realtimeService.sendCommand({
-        target: 'system',
-        action: 'CALIBRATE',
-        mode: 'MANUAL',
-      });
-      return { success: true, commandId };
-    } catch (error) {
-      return reply.code(500).send({ error: 'Failed to send calibrate command' });
-    }
-  });
+      if (!isPrivilegedRole(auth.role)) {
+        return reply.code(403).send({
+          error: 'Forbidden',
+          message: 'Only operators and admins can request a reboot',
+        });
+      }
+
+      try {
+        const commandId = await realtimeService.sendCommand({
+          target: 'system',
+          action: 'REBOOT',
+          mode: 'MANUAL',
+        });
+        logger.info({ by: auth.userId }, 'System reboot requested');
+        return { success: true, commandId };
+      } catch (error) {
+        logger.error({ err: error, by: auth.userId }, 'Failed to send reboot command');
+        return reply.code(500).send({ error: 'Failed to send reboot command' });
+      }
+    },
+  );
+
+  fastify.post(
+    '/api/system/calibrate',
+    { preHandler: [requireAuth] },
+    async (request, reply) => {
+      const auth = resolveCaptured(request);
+
+      if (!isPrivilegedRole(auth.role)) {
+        return reply.code(403).send({
+          error: 'Forbidden',
+          message: 'Only operators and admins can trigger calibration',
+        });
+      }
+
+      try {
+        const commandId = await realtimeService.sendCommand({
+          target: 'system',
+          action: 'CALIBRATE',
+          mode: 'MANUAL',
+        });
+        logger.info({ by: auth.userId }, 'System calibration requested');
+        return { success: true, commandId };
+      } catch (error) {
+        logger.error({ err: error, by: auth.userId }, 'Failed to send calibrate command');
+        return reply.code(500).send({ error: 'Failed to send calibrate command' });
+      }
+    },
+  );
 
   // Metrics endpoint (Prometheus format)
-  fastify.get('/metrics', async (request, reply) => {
+  fastify.get('/metrics', async (_request, reply) => {
     const mem = process.memoryUsage();
     const state = realtimeService.getState();
     const sensorData = state.sensorData;
-
     reply.header('Content-Type', 'text/plain');
     return `
 # HELP sensoura_uptime_seconds Process uptime in seconds

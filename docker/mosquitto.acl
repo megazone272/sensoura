@@ -1,0 +1,7 @@
+user sensoura
+
+# This shared broker identity is a constrained local integration account.
+# Provision separate credentials and ACL entries for each real device.
+topic write sensoura/telemetry/#
+topic write sensoura/status/#
+topic read sensoura/commands/#

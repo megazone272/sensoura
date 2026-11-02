@@ -5,13 +5,15 @@ import { fastifyRateLimit } from '@fastify/rate-limit';
 import { fastifyCompress } from '@fastify/compress';
 import { getEnv } from './config/env.js';
 import { getLogger } from './utils/logger.js';
-import { initializeFirebase } from './services/firebase.js';
+import { initializeFirebase, isFirebaseEnabled } from './services/firebase.js';
 import { realtimeService } from './services/realtime.js';
 import { initializeSocketIO } from './socket/index.js';
 import { registerRoutes } from './routes/index.js';
+import { registerClimateRoutes } from './routes/climate.js';
 import { aiEngine } from './ai/engine.js';
 
 const env = getEnv();
+const frontendOrigins = env.FRONTEND_URL.split(',').map((origin) => origin.trim()).filter(Boolean);
 const logger = getLogger('main');
 
 async function buildApp() {
@@ -27,7 +29,7 @@ async function buildApp() {
   });
 
   await app.register(fastifyCors, {
-    origin: env.FRONTEND_URL,
+    origin: frontendOrigins,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   });
@@ -54,6 +56,7 @@ async function buildApp() {
 
   // Routes
   await registerRoutes(app);
+  await registerClimateRoutes(app);
 
   // Global error handler
   app.setErrorHandler((error, request, reply) => {
@@ -79,7 +82,7 @@ async function start() {
 
     // Socket.IO attached to Fastify's own HTTP server (standard Fastify 4
     // pattern — avoids routing every socket.io request through app.routing).
-    const io = initializeSocketIO(app.server, env.FRONTEND_URL);
+    const io = initializeSocketIO(app.server, frontendOrigins);
     app.decorate('io', io);
 
     await app.listen({ port: env.PORT, host: env.HOST });
@@ -89,7 +92,7 @@ async function start() {
       host: env.HOST,
       env: env.NODE_ENV,
       mission: env.MISSION_NAME,
-      firebase: realtimeService.isUsingRestFallback() ? 'rest-fallback' : 'sdk',
+      firebase: isFirebaseEnabled() ? 'sdk' : 'mock',
     }, '🚀 SENSOURA Backend started');
 
     // Graceful shutdown

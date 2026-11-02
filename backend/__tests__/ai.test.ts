@@ -4,7 +4,9 @@ import { realtimeService } from '../src/services/realtime.js';
 
 describe('AI Engine', () => {
   beforeAll(async () => {
-    await aiEngine.initialize();
+    // Use a longer timeout for the first run. TensorFlow.js model loading can
+    // exceed the default 10s hook timeout on slow or heavily loaded machines.
+    await aiEngine.initialize(15000);
   });
 
   it('should be initialized', () => {
@@ -46,6 +48,21 @@ describe('AI Engine', () => {
     if (data) {
       const suggestions = aiEngine.generateSuggestions(data);
       expect(Array.isArray(suggestions)).toBe(true);
+    }
+  });
+
+  it('should use new sensor field keys (AirTemp, SoilTemp, AirHumidity, SoilMoisture, VOC, Light, Barometricpressure)', () => {
+    const data = realtimeService.getSensorData();
+    if (data) {
+      // The deployment contract uses the new field names; the engine must accept them.
+      expect(typeof data.AirTemp).toBe('number');
+      expect(typeof data.SoilTemp).toBe('number');
+      expect(typeof data.AirHumidity).toBe('number');
+      expect(typeof data.SoilMoisture).toBe('number');
+      expect(typeof data.VOC).toBe('number');
+      expect(typeof data.Light).toBe('number');
+      expect(typeof data.Barometricpressure).toBe('number');
+      expect(Array.isArray(aiEngine.generateSuggestions(data))).toBe(true);
     }
   });
 
