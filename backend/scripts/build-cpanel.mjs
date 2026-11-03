@@ -14,7 +14,9 @@ const projectRoot = path.resolve(backendDir, '..');
 
 const frontendDir = path.join(projectRoot, 'frontend');
 const frontendDist = path.join(frontendDir, 'dist');
-const publicDir = path.join(backendDir, 'public');
+
+const backendDist = path.join(backendDir, 'dist');
+const publicDir = path.join(backendDist, 'public');
 
 function runNpm(args, cwd, extraEnv = {}) {
   const command = process.platform === 'win32' ? 'npm.cmd' : 'npm';
@@ -49,19 +51,24 @@ try {
     throw new Error('Frontend build did not produce index.html');
   }
 
-  console.log('\n[4/5] Copying frontend into backend/public...');
+  console.log('\n[4/5] Building backend...');
+  runNpm(['run', 'build:server'], backendDir);
+
+  if (!existsSync(path.join(backendDist, 'index.js'))) {
+    throw new Error('Backend build did not produce dist/index.js');
+  }
+
+  console.log('\n[5/5] Copying frontend into backend/dist/public...');
   rmSync(publicDir, { recursive: true, force: true });
   mkdirSync(publicDir, { recursive: true });
   cpSync(frontendDist, publicDir, { recursive: true });
 
-  console.log('\n[5/5] Building backend...');
-  runNpm(['run', 'build:server'], backendDir);
-
-  if (!existsSync(path.join(backendDir, 'dist', 'index.js'))) {
-    throw new Error('Backend build did not produce dist/index.js');
+  if (!existsSync(path.join(publicDir, 'index.html'))) {
+    throw new Error('Frontend index.html missing from dist/public');
   }
 
   console.log('\nSENSOURA production build completed successfully.');
+  console.log('Frontend location: dist/public');
 
 } catch (error) {
   console.error('\nSENSOURA build failed:', error);
