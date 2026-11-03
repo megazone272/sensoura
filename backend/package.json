@@ -6,7 +6,8 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc",
+    "build": "node scripts/build-cpanel.mjs",
+    "build:server": "tsc",
     "start": "node dist/index.js",
     "test": "vitest run",
     "test:pipeline": "vitest run __tests__/ai-pipeline",
