@@ -1,3 +1,4 @@
+
 import { spawnSync } from 'node:child_process';
 import {
   cpSync,
@@ -19,16 +20,23 @@ const backendDist = path.join(backendDir, 'dist');
 const publicDir = path.join(backendDist, 'public');
 
 function runNpm(args, cwd, extraEnv = {}) {
-  const command = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+  const npmCli = process.env.npm_execpath;
 
-  const result = spawnSync(command, args, {
+  if (!npmCli) {
+    throw new Error(
+      'npm_execpath is unavailable. Run this script through npm run build.'
+    );
+  }
+
+  const result = spawnSync(process.execPath, [npmCli, ...args], {
     cwd,
     stdio: 'inherit',
     env: { ...process.env, ...extraEnv },
-    shell: process.platform === 'win32',
   });
 
-  if (result.error) throw result.error;
+  if (result.error) {
+    throw result.error;
+  }
 
   if (result.status !== 0) {
     throw new Error(`npm ${args.join(' ')} failed in ${cwd}`);
