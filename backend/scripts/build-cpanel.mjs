@@ -1,4 +1,3 @@
-
 import { spawnSync } from 'node:child_process';
 import {
   cpSync,
@@ -28,15 +27,15 @@ function runNpm(args, cwd, extraEnv = {}) {
     );
   }
 
-  const result = spawnSync(process.execPath, [npmCli, ...args], {
+  const nodeCommand = process.platform === 'win32' ? process.execPath : 'node';
+
+  const result = spawnSync(nodeCommand, [npmCli, ...args], {
     cwd,
     stdio: 'inherit',
     env: { ...process.env, ...extraEnv },
   });
 
-  if (result.error) {
-    throw result.error;
-  }
+  if (result.error) throw result.error;
 
   if (result.status !== 0) {
     throw new Error(`npm ${args.join(' ')} failed in ${cwd}`);
@@ -44,13 +43,10 @@ function runNpm(args, cwd, extraEnv = {}) {
 }
 
 try {
-  console.log('\n[1/5] Installing backend dependencies...');
-  runNpm(['ci', '--include=dev'], backendDir);
-
-  console.log('\n[2/5] Installing frontend dependencies...');
+  console.log('\n[1/4] Installing frontend dependencies...');
   runNpm(['ci', '--include=dev'], frontendDir);
 
-  console.log('\n[3/5] Building frontend...');
+  console.log('\n[2/4] Building frontend...');
   runNpm(['run', 'build'], frontendDir, {
     VITE_BASE_PATH: '/',
   });
@@ -59,14 +55,14 @@ try {
     throw new Error('Frontend build did not produce index.html');
   }
 
-  console.log('\n[4/5] Building backend...');
+  console.log('\n[3/4] Building backend...');
   runNpm(['run', 'build:server'], backendDir);
 
   if (!existsSync(path.join(backendDist, 'index.js'))) {
     throw new Error('Backend build did not produce dist/index.js');
   }
 
-  console.log('\n[5/5] Copying frontend into backend/dist/public...');
+  console.log('\n[4/4] Copying frontend into backend/dist/public...');
   rmSync(publicDir, { recursive: true, force: true });
   mkdirSync(publicDir, { recursive: true });
   cpSync(frontendDist, publicDir, { recursive: true });
