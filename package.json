@@ -1,0 +1,12 @@
+{
+  "name": "sensoura",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "npm --prefix backend ci --include=dev && npm --prefix frontend ci --include=dev && npm --prefix frontend run build && npm --prefix backend run build:server && node scripts/copy-frontend.mjs",
+    "start": "node backend/dist/index.js"
+  }
+}
