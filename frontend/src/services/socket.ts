@@ -20,7 +20,7 @@ export function getSocket(autoConnect = true): Socket {
           callback(token ? { token, deviceId: activeDeviceId } : {});
         }).catch(() => callback({}));
       },
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
       reconnection: true,
       reconnectionAttempts: 10,
       reconnectionDelay: 1000,
