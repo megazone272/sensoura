@@ -1,3 +1,4 @@
+
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { existsSync } from 'node:fs';
@@ -70,7 +71,7 @@ async function buildApp() {
     await app.register(fastifyStatic, {
       root: frontendRoot,
       prefix: '/',
-      index: false,
+      index: ['index.html'],
     });
 
     logger.info({ frontendRoot }, 'Frontend static files registered');
