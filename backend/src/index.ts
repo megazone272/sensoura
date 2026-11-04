@@ -82,11 +82,12 @@ async function buildApp() {
   app.setErrorHandler((error, request, reply) => {
     logger.error({ err: error, url: request.url }, 'Unhandled error');
 
-    const statusCode = error.statusCode || 500;
+    const details = error as { statusCode?: number; message?: string; stack?: string };
+    const statusCode = details.statusCode || 500;
 
     reply.code(statusCode).send({
-      error: statusCode === 500 ? 'Internal Server Error' : error.message,
-      ...(env.NODE_ENV === 'development' && { stack: error.stack }),
+      error: statusCode === 500 ? 'Internal Server Error' : details.message,
+      ...(env.NODE_ENV === 'development' && { stack: details.stack }),
     });
   });
 

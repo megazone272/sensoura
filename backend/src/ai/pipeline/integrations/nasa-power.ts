@@ -102,11 +102,11 @@ const powerSchema = z
       .optional(),
     properties: z
       .object({
-        parameter: z.record(z.record(numberOrNull)),
+        parameter: z.record(z.string(), z.record(z.string(), numberOrNull)),
       })
       .optional(),
     parameters: z
-      .record(
+      .record(z.string(),
         z.object({
           units: z.string(),
           longname: z.string().optional(),

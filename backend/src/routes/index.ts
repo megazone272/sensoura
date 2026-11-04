@@ -2,14 +2,15 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { getLogger } from '../utils/logger.js';
 import { realtimeService } from '../services/realtime.js';
-import { isFirebaseEnabled } from '../services/firebase.js';
 import { aiEngine } from '../ai/engine.js';
 import { getEnv } from '../config/env.js';
 import { registerDeviceRoutes } from './device.js';
+import { registerEmailRoutes } from './email.js';
 
 import {
   requireAuth,
   requireUserAuth,
+  requireMetricsAuth,
   isPrivilegedRole,
   resolveCaptured,
 } from '../services/auth.js';
@@ -21,7 +22,18 @@ const commandSchema = z.object({
   target: z.enum(['pump', 'buzzer', 'led', 'system']),
   action: z.enum(['ON', 'OFF', 'MUTE', 'UNMUTE', 'REBOOT', 'CALIBRATE']),
   mode: z.enum(['MANUAL', 'AUTO']).default('MANUAL'),
-});
+}).strict();
+
+const relaySchema = z.object({
+  state: z.enum(['ON', 'OFF']),
+  reason: z.string().trim().min(1).max(256),
+}).strict();
+
+const buzzerSchema = z.object({
+  action: z.enum(['MUTE', 'UNMUTE']),
+}).strict();
+
+const suggestionIdSchema = z.string().trim().min(1).max(128).regex(/^[A-Za-z0-9._:-]+$/);
 
 function notFound(message: string): Error & { statusCode: number } {
   const error = new Error(message) as Error & { statusCode: number };
@@ -31,28 +43,20 @@ function notFound(message: string): Error & { statusCode: number } {
 
 export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   registerDeviceRoutes(fastify);
+  registerEmailRoutes(fastify);
 
   // Health check
   fastify.get('/health', async () => ({
     status: 'ok',
-    mission: env.MISSION_NAME,
-    phase: env.MISSION_PHASE,
-    team: env.TEAM_ID,
     timestamp: Date.now(),
     uptime: process.uptime(),
-    firebase: isFirebaseEnabled() ? 'sdk' : 'mock',
-    aiBackend: aiEngine.getModelInfo().backend,
   }));
 
   fastify.get('/ready', async (_request, reply) => {
     const realtimeReady = realtimeService.isRealtimeReady();
     const readiness = {
       ready: realtimeReady,
-      services: {
-        realtime: realtimeReady,
-        ai: true,
-        socket: true,
-      },
+      timestamp: Date.now(),
     };
     if (!realtimeReady) return reply.code(503).send(readiness);
     return readiness;
@@ -121,6 +125,8 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
     '/api/ai-suggestions/:id/approve',
     { preHandler: [requireAuth] },
     async (request, reply) => {
+      const suggestionId = suggestionIdSchema.safeParse(request.params.id);
+      if (!suggestionId.success) return reply.code(400).send({ error: 'Invalid suggestion id' });
       const auth = resolveCaptured(request);
 
       if (!isPrivilegedRole(auth.role)) {
@@ -131,8 +137,8 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
       }
 
       try {
-        await realtimeService.approveSuggestion(request.params.id);
-        logger.info({ suggestionId: request.params.id, by: auth.userId }, 'Suggestion approved');
+        await realtimeService.approveSuggestion(suggestionId.data);
+        logger.info({ suggestionId: suggestionId.data, by: auth.userId }, 'Suggestion approved');
         return { success: true };
       } catch (error) {
         logger.error({ err: error, suggestionId: request.params.id, by: auth.userId }, 'Failed to approve suggestion');
@@ -145,6 +151,8 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
     '/api/ai-suggestions/:id/reject',
     { preHandler: [requireAuth] },
     async (request, reply) => {
+      const suggestionId = suggestionIdSchema.safeParse(request.params.id);
+      if (!suggestionId.success) return reply.code(400).send({ error: 'Invalid suggestion id' });
       const auth = resolveCaptured(request);
 
       if (!isPrivilegedRole(auth.role)) {
@@ -155,8 +163,8 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
       }
 
       try {
-        await realtimeService.rejectSuggestion(request.params.id);
-        logger.info({ suggestionId: request.params.id, by: auth.userId }, 'Suggestion rejected');
+        await realtimeService.rejectSuggestion(suggestionId.data);
+        logger.info({ suggestionId: suggestionId.data, by: auth.userId }, 'Suggestion rejected');
         return { success: true };
       } catch (error) {
         logger.error({ err: error, suggestionId: request.params.id, by: auth.userId }, 'Failed to reject suggestion');
@@ -166,7 +174,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   );
 
   // Manual relay control
-  fastify.post<{ Body: { state: 'ON' | 'OFF'; reason: string } }>(
+  fastify.post<{ Body: z.infer<typeof relaySchema> }>(
     '/api/relay',
     { preHandler: [requireAuth] },
     async (request, reply) => {
@@ -179,10 +187,9 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
         });
       }
 
-      const { state, reason } = request.body;
-      if (!['ON', 'OFF'].includes(state)) {
-        return reply.code(400).send({ error: 'Invalid state' });
-      }
+      const parsedBody = relaySchema.safeParse(request.body);
+      if (!parsedBody.success) return reply.code(400).send({ error: 'Invalid relay request' });
+      const { state, reason } = parsedBody.data;
 
       try {
         const commandId = await realtimeService.sendCommand({
@@ -199,7 +206,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   );
 
   // Buzzer control
-  fastify.post<{ Body: { action: 'MUTE' | 'UNMUTE' } }>(
+  fastify.post<{ Body: z.infer<typeof buzzerSchema> }>(
     '/api/buzzer',
     { preHandler: [requireAuth] },
     async (request, reply) => {
@@ -212,10 +219,9 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
         });
       }
 
-      const { action } = request.body;
-      if (!['MUTE', 'UNMUTE'].includes(action)) {
-        return reply.code(400).send({ error: 'Invalid action' });
-      }
+      const parsedBody = buzzerSchema.safeParse(request.body);
+      if (!parsedBody.success) return reply.code(400).send({ error: 'Invalid buzzer request' });
+      const { action } = parsedBody.data;
 
       try {
         const commandId = await realtimeService.sendCommand({
@@ -273,7 +279,12 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
 
   // Historical data (would query Firebase/Time-series DB)
   fastify.get('/api/history/sensor-data', { preHandler: [requireUserAuth] }, async (request) => {
-    const { limit = '100' } = request.query as { limit?: string };
+    const querySchema = z.object({
+      limit: z.coerce.number().int().min(1).max(100).default(100),
+    }).strict();
+    const parsedQuery = querySchema.safeParse(request.query);
+    if (!parsedQuery.success) throw Object.assign(new Error('Invalid history query'), { statusCode: 400 });
+    const { limit } = parsedQuery.data;
 
     const isDevMockEnabled = env.NODE_ENV === 'development';
 
@@ -285,8 +296,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
       };
     }
 
-    const count = Math.min(parseInt(limit, 10) || 0, 100);
-    if (count <= 0) return { data: [], count: 0, note: 'No historical sensor data available yet.' };
+    const count = limit;
 
     const now = Date.now();
     const base = realtimeService.getSensorData();
@@ -374,7 +384,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   );
 
   // Metrics endpoint (Prometheus format)
-  fastify.get('/metrics', async (_request, reply) => {
+  fastify.get('/metrics', { preHandler: [requireMetricsAuth] }, async (_request, reply) => {
     const mem = process.memoryUsage();
     const state = realtimeService.getState();
     const sensorData = state.sensorData;

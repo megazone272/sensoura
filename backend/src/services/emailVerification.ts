@@ -198,8 +198,8 @@ export function createEmailVerificationService(
           });
           await firebaseAuth.revokeRefreshTokens(identity.uid);
           return;
-        } catch (error) {
-          logger.warn({ error: (error as Error).message }, 'Firebase email verification update failed');
+        } catch {
+          logger.warn({ errorCategory: 'firebase_email_verification_update_failed' }, 'Firebase email verification update failed');
           throw new EmailVerificationError('Could not verify the email address. Request a new code.', 503);
         }
       }

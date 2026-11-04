@@ -79,5 +79,21 @@ desktop.ini
 .freebuff/
 Temp/
 tmp/
+.work/
+vitest-*.txt
+
+# Local validation logs and audit exports (never publish)
+backend/*.err
+backend/*.out
+backend/*.err.txt
+backend/*.out.txt
+backend/*-audit.json
+backend/npm-audit.json
+frontend/*.err
+frontend/*.out
+frontend/*.err.txt
+frontend/*.out.txt
+frontend/*-audit.json
+frontend/npm-audit.json
 
 # Generated frontend build

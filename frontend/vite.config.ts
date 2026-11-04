@@ -2,24 +2,26 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import { fileURLToPath } from 'node:url';
 
 // Serve the dashboard from the domain root.
 const base = process.env.VITE_BASE_PATH ?? '/';
+const configDir = fileURLToPath(new URL('.', import.meta.url));
 
 export default defineConfig({
   base,
   plugins: [react()],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
-      '@components': path.resolve(__dirname, './src/components'),
-      '@contexts': path.resolve(__dirname, './src/contexts'),
-      '@pages': path.resolve(__dirname, './src/pages'),
-      '@hooks': path.resolve(__dirname, './src/hooks'),
-      '@services': path.resolve(__dirname, './src/services'),
-      '@store': path.resolve(__dirname, './src/store'),
-      '@shared': path.resolve(__dirname, './src/shared'),
-      '@styles': path.resolve(__dirname, './src/styles'),
+      '@': path.resolve(configDir, './src'),
+      '@components': path.resolve(configDir, './src/components'),
+      '@contexts': path.resolve(configDir, './src/contexts'),
+      '@pages': path.resolve(configDir, './src/pages'),
+      '@hooks': path.resolve(configDir, './src/hooks'),
+      '@services': path.resolve(configDir, './src/services'),
+      '@store': path.resolve(configDir, './src/store'),
+      '@shared': path.resolve(configDir, './src/shared'),
+      '@styles': path.resolve(configDir, './src/styles'),
     },
   },
   server: {
@@ -53,11 +55,13 @@ export default defineConfig({
     sourcemap: false,
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'socket.io-client'],
-          charts: ['recharts'],
-          motion: ['gsap', '@gsap/react'],
-          utils: ['date-fns', 'zustand', 'clsx'],
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined;
+          if (/[\\/]node_modules[\\/](react|react-dom|socket.io-client)[\\/]/.test(id)) return 'vendor';
+          if (/[\\/]node_modules[\\/]recharts[\\/]/.test(id)) return 'charts';
+          if (/[\\/]node_modules[\\/](gsap|@gsap[\\/]react)[\\/]/.test(id)) return 'motion';
+          if (/[\\/]node_modules[\\/](date-fns|zustand|clsx)[\\/]/.test(id)) return 'utils';
+          return undefined;
         },
       },
     },

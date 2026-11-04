@@ -147,7 +147,7 @@ export const aiSuggestionSchema = z.object({
   confidence: z.number().min(0).max(1),
   createdAt: z.number(),
   expiresAt: z.number(),
-  metadata: z.record(z.any()).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
 });
 
 export type SensorDataInput = z.infer<typeof sensorDataSchema>;

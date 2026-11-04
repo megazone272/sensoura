@@ -340,6 +340,7 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply):
 
 export async function requireUserAuth(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   await requireAuth(request, reply);
+  if (reply.sent) return;
   if (request.authContext?.isDevice) {
     reply.code(403).send({ error: 'Forbidden', message: 'Device identities cannot access the dashboard API' });
   }
@@ -378,6 +379,29 @@ export async function requirePrivileged(request: FastifyRequest, reply: FastifyR
   }
 
   request.authContext = auth;
+}
+
+/** Metrics are operational data, not a public application endpoint. */
+export async function requireMetricsAuth(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  if ((process.env.NODE_ENV ?? 'development') !== 'production') return;
+
+  const expected = process.env.METRICS_AUTH_TOKEN;
+  if (!expected || expected.length < 32) {
+    reply.code(404).send({ error: 'Not Found' });
+    return;
+  }
+
+  const candidate = readBearerToken(request);
+  if (!candidate || candidate.length > 4096) {
+    reply.code(401).send({ error: 'Unauthorized' });
+    return;
+  }
+
+  const candidateDigest = createHash('sha256').update(candidate, 'utf8').digest();
+  const expectedDigest = createHash('sha256').update(expected, 'utf8').digest();
+  if (!timingSafeEqual(candidateDigest, expectedDigest)) {
+    reply.code(401).send({ error: 'Unauthorized' });
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -159,11 +159,11 @@ export const indoorSeriesPointSchema = z.object({
   ingestedAt: iso,
   greenhouseId: z.string().min(1),
   deviceId: z.string().nullable(),
-  values: z.record(z.number().nullable()),
-  units: z.record(z.string()),
+  values: z.record(z.string(), z.number().nullable()),
+  units: z.record(z.string(), z.string()),
   /** Firebase field name actually read for each normalized variable. */
-  sourceFields: z.record(z.string()).optional(),
-  quality: z.record(z.enum(QUALITY_STATUSES)),
+  sourceFields: z.record(z.string(), z.string()).optional(),
+  quality: z.record(z.string(), z.enum(QUALITY_STATUSES)),
   overallQuality: z.enum(['ok', 'degraded', 'invalid', 'stale']),
 });
 
@@ -183,11 +183,11 @@ export const indoorSummarySchema = z.object({
   observedAt: iso,
   ageMinutes: finiteNumber,
   quality: z.enum(['ok', 'degraded', 'invalid', 'stale']),
-  values: z.record(finiteNumber.nullable()),
+  values: z.record(z.string(), finiteNumber.nullable()),
   /** Raw sensor values, kept next to the (possibly calibrated) values. */
-  rawValues: z.record(finiteNumber.nullable()).optional(),
-  units: z.record(z.string()),
-  variableQuality: z.record(z.enum(QUALITY_STATUSES)),
+  rawValues: z.record(z.string(), finiteNumber.nullable()).optional(),
+  units: z.record(z.string(), z.string()),
+  variableQuality: z.record(z.string(), z.enum(QUALITY_STATUSES)),
   reasons: z.array(z.string()),
 });
 
@@ -197,8 +197,8 @@ export const outdoorSummarySchema = z.object({
   ageMinutes: finiteNumber,
   timeDeltaSeconds: z.number().nullable(),
   distanceKm: finiteNumber.nullable(),
-  values: z.record(finiteNumber.nullable()),
-  units: z.record(z.string()),
+  values: z.record(z.string(), finiteNumber.nullable()),
+  units: z.record(z.string(), z.string()),
   quality: z.enum(['ok', 'degraded', 'invalid', 'stale']),
   reasons: z.array(z.string()),
   comparisonCaveats: z.array(z.string()),
@@ -278,10 +278,10 @@ export const suggestionV1Schema = z.object({
       .object({
         samples: z.number().int(),
         windowMinutes: finiteNumber,
-        trends: z.record(z.number().nullable()),
+        trends: z.record(z.string(), z.number().nullable()),
       })
       .nullable(),
-    equipment: z.record(z.boolean()),
+    equipment: z.record(z.string(), z.boolean()),
     dataQuality: z.object({
       status: z.enum(['ok', 'degraded', 'invalid', 'stale']),
       reasons: z.array(z.string()),
@@ -323,7 +323,7 @@ export const predictionV1Schema = z.object({
     'source_comparison',
   ]),
   target: z.string().min(1),
-  predictedValue: z.union([finiteNumber, z.string(), z.record(z.any()), z.array(z.any())]).nullable(),
+  predictedValue: z.union([finiteNumber, z.string(), z.record(z.string(), z.any()), z.array(z.any())]).nullable(),
   unit: z.string().nullable(),
   forecastHorizon: z
     .object({
@@ -342,7 +342,7 @@ export const predictionV1Schema = z.object({
       sampleSize: z.number().int().min(0),
     })
     .nullable(),
-  inputSummary: z.record(z.any()),
+  inputSummary: z.record(z.string(), z.any()),
   dataQuality: z.object({
     status: z.enum(['ok', 'degraded', 'invalid', 'stale']),
     reasons: z.array(z.string()),
@@ -381,7 +381,7 @@ export const executionV1Schema = z.object({
   startedAt: iso,
   finishedAt: iso.nullable(),
   durationMs: z.number().nullable(),
-  stats: z.record(z.union([z.number(), z.string(), z.boolean(), z.null()])),
+  stats: z.record(z.string(), z.union([z.number(), z.string(), z.boolean(), z.null()])),
   errors: z.array(
     z.object({
       step: z.string(),

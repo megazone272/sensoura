@@ -6,7 +6,10 @@ const localStorageMock = {
   removeItem: (key: string) => { delete localStorageMock.store[key]; },
   clear: () => { localStorageMock.store = {}; },
 };
-(globalThis as any).localStorage = localStorageMock;
+Object.defineProperty(window, 'localStorage', {
+  configurable: true,
+  value: localStorageMock,
+});
 
 // Setup window.matchMedia for Tailwind/dark mode tests
 Object.defineProperty(window, 'matchMedia', {

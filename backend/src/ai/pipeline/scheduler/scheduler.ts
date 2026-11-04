@@ -247,7 +247,7 @@ export class PipelineScheduler {
         status,
         finishedAt: toIsoUtc(finishedAtMs),
         durationMs: Math.max(0, finishedAtMs - startedAtMs),
-        stats,
+        stats: { ...stats },
         errors,
       };
       await saveExecution(this.opts.store, this.opts.executionsPath, finalRecord);
@@ -256,7 +256,7 @@ export class PipelineScheduler {
     const outcome = this.outcome(status, executionId, startedAtMs, errors, warnings, stats);
     this.lastOutcome = outcome;
     this.opts.logger.info(
-      { pipeline: this.opts.pipeline, executionId, status, durationMs: outcome.durationMs, stats },
+      { pipeline: this.opts.pipeline, executionId, status, durationMs: outcome.durationMs, stats: { ...stats } },
       'Pipeline run finished'
     );
     return outcome;
@@ -273,7 +273,7 @@ export class PipelineScheduler {
       startedAt: outcome.startedAt,
       finishedAt: outcome.finishedAt,
       durationMs: outcome.durationMs,
-      stats: outcome.stats,
+      stats: { ...outcome.stats },
       errors: outcome.errors,
       dryRun: this.opts.dryRun ?? false,
       storeKind: this.opts.store.kind,

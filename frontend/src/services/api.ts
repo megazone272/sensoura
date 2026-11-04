@@ -60,6 +60,11 @@ export const endpoints = {
   getClimateHistory: (params: { start: string; end: string }) => api.get('/climate/history', { params }),
   getClimateStatus: () => api.get('/climate/status'),
 
+  getEmailStatus: () => api.get('/admin/email/status'),
+  verifyEmailSmtp: () => api.get('/admin/email/verify'),
+  previewEmail: (params: { template: string; language: 'ar' | 'en' }) => api.get('/admin/email/preview', { params }),
+  sendTestEmail: (payload: { recipient: string; template: string; language: 'ar' | 'en' }) => api.post('/admin/email/test', payload),
+
   health: () => axios.get(`${API_URL}/health`, { timeout: 10000 }),
   ready: () => axios.get(`${API_URL}/ready`, { timeout: 10000 }),
   metrics: () => axios.get(`${API_URL}/metrics`, { timeout: 10000 }),

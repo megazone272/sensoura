@@ -43,6 +43,7 @@ export const envSchema = z.object({
   DISPOSABLE_EMAIL_DOMAINS: z.string().optional().default(''),
   DEVICE_ID: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/).default('sensoura-esp32-01'),
   DEVICE_AUTH_TOKEN: z.string().min(32).optional(),
+  METRICS_AUTH_TOKEN: z.string().min(32).optional(),
   API_RATE_LIMIT: z.coerce.number().default(100),
 
   // Optional application log level override. The backend logger defaults to
@@ -64,6 +65,17 @@ export const envSchema = z.object({
       }
     });
   }, 'FRONTEND_URL must contain one or more valid comma-separated origins'),
+
+  // cPanel SMTP. SMTP_PASS is supplied only through the backend runtime.
+  SMTP_HOST: z.string().default('mail.sensoura.ox0x.com'),
+  SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(465),
+  SMTP_SECURE: z.preprocess((value) => value === undefined ? true : value === true || value === 'true', z.boolean()),
+  SMTP_USER: z.string().default('info@sensoura.ox0x.com'),
+  SMTP_PASS: z.string().optional().default(''),
+  SMTP_FROM_NAME: z.string().trim().min(1).max(120).default('Sensoura'),
+  SMTP_FROM_EMAIL: z.string().email().default('info@sensoura.ox0x.com'),
+  EMAIL_DEFAULT_LANGUAGE: z.enum(['ar', 'en']).default('en'),
+  EMAIL_LOGO_URL: z.string().url().optional(),
 
   // NASA Competition Metadata
   MISSION_NAME: z.string().default('SENSOURA'),

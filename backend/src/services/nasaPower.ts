@@ -53,7 +53,10 @@ const MIN_DATE = '19810101';
 const SOURCE_CAVEAT = 'Daily gridded outdoor climate data, not a live weather feed or a greenhouse sensor measurement.';
 const payloadSchema = z.object({
   properties: z.object({
-    parameter: z.object({ T2M: z.record(z.unknown()).optional(), RH2M: z.record(z.unknown()).optional() }),
+    parameter: z.object({
+      T2M: z.record(z.string(), z.unknown()).optional(),
+      RH2M: z.record(z.string(), z.unknown()).optional(),
+    }),
   }).passthrough(),
   header: z.object({ fill_value: z.number().finite().optional() }).passthrough().optional(),
   parameters: z.object({
