@@ -36,6 +36,7 @@ async function buildApp() {
   await app.register(fastifyHelmet, {
     contentSecurityPolicy: false,
     crossOriginEmbedderPolicy: false,
+    crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
   });
 
   await app.register(fastifyCors, {
