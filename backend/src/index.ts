@@ -23,7 +23,7 @@ const logger = getLogger('main');
 
 // Frontend build location: backend/public
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
-const frontendRoot = path.resolve(currentDir, 'public');
+const frontendRoot = path.resolve(currentDir, '../public');
 const frontendIndexPath = path.join(frontendRoot, 'index.html');
 
 async function buildApp() {
