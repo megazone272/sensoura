@@ -48,36 +48,19 @@ function isFirebaseEmailVerified(idToken: string): boolean {
 }
 
 async function sendFirebaseVerificationLink(idToken: string): Promise<void> {
-  if (!FIREBASE_API_KEY) throw new Error('Firebase sign-up is not configured. Set VITE_FIREBASE_API_KEY for this build.');
-  const continueUrl = typeof window === 'undefined'
-    ? undefined
-    : new URL(`${import.meta.env.BASE_URL}login?emailVerified=1`, window.location.origin).toString();
+  const apiBase = import.meta.env.VITE_API_URL?.trim() ?? '';
   let response: Response;
   try {
-    response = await fetch(
-      `https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${encodeURIComponent(FIREBASE_API_KEY)}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          requestType: 'VERIFY_EMAIL',
-          idToken,
-          ...(continueUrl ? { continueUrl } : {}),
-        }),
-      },
-    );
+    response = await fetch(`${apiBase}/api/auth/email-verification/send`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${idToken}` },
+    });
   } catch {
     throw new Error('Email verification service is unavailable');
   }
-  const data = await response.json().catch(() => ({})) as { error?: { message?: string } };
-  if (response.ok) return;
-  const code = data.error?.message ?? '';
-  if (code === 'OPERATION_NOT_ALLOWED') throw new Error('Email verification is not enabled in Firebase');
-  if (code === 'INVALID_CONTINUE_URI' || code === 'UNAUTHORIZED_DOMAIN') {
-    throw new Error('Email verification return URL is not authorized in Firebase');
-  }
-  if (code === 'API_KEY_INVALID') throw new Error('The Firebase Web API key is invalid');
-  throw new Error('Verification link could not be sent');
+  const data = await response.json().catch(() => ({})) as { error?: string; retryAfterSeconds?: number; sent?: boolean };
+  if (!response.ok) throw new Error(data.error ?? 'Verification link could not be sent');
+  if (data.sent === false) throw new Error(`Verification email cooldown active. Retry in ${data.retryAfterSeconds ?? 60} seconds`);
 }
 
 export function isLoopbackHost(hostname: string): boolean {

@@ -6,6 +6,7 @@ import { aiEngine } from '../ai/engine.js';
 import { getEnv } from '../config/env.js';
 import { registerDeviceRoutes } from './device.js';
 import { registerEmailRoutes } from './email.js';
+import { registerFirebaseEmailVerificationRoutes } from './firebaseEmailVerification.js';
 
 import {
   requireAuth,
@@ -44,6 +45,7 @@ function notFound(message: string): Error & { statusCode: number } {
 export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   registerDeviceRoutes(fastify);
   registerEmailRoutes(fastify);
+  registerFirebaseEmailVerificationRoutes(fastify);
 
   // Health check
   fastify.get('/health', async () => ({

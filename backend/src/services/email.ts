@@ -7,7 +7,7 @@ const env = getEnv();
 const logger = getLogger('email');
 
 export type EmailLanguage = 'ar' | 'en';
-export type EmailTemplate = 'welcome' | 'sensor-alert' | 'ai-prediction' | 'account-update' | 'contact-confirmation';
+export type EmailTemplate = 'welcome' | 'email-verification' | 'sensor-alert' | 'ai-prediction' | 'account-update' | 'contact-confirmation';
 export type DeliveryState = 'queued' | 'accepted' | 'failed';
 
 export interface EmailData {
@@ -22,6 +22,7 @@ export interface EmailData {
   confidence?: string;
   action?: string;
   message?: string;
+  verificationLink?: string;
 }
 
 export interface EmailDeliveryRecord {
@@ -36,7 +37,7 @@ export interface EmailDeliveryRecord {
 }
 
 const emailAddressSchema = z.string().trim().email().max(254);
-const templateSchema = z.enum(['welcome', 'sensor-alert', 'ai-prediction', 'account-update', 'contact-confirmation']);
+const templateSchema = z.enum(['welcome', 'email-verification', 'sensor-alert', 'ai-prediction', 'account-update', 'contact-confirmation']);
 const languageSchema = z.enum(['ar', 'en']);
 const history: EmailDeliveryRecord[] = [];
 const sentKeys = new Map<string, number>();
@@ -82,12 +83,13 @@ function labels(language: EmailLanguage) {
     : { dir: 'ltr', greeting: 'Hello', intro: 'Welcome to Sensoura, your smart agriculture and real-time greenhouse monitoring platform.', open: 'Open Dashboard', support: 'Support', footer: 'Smarter Agriculture for a More Sustainable Future.', welcome: 'Welcome to SENSOURA', features: ['Smart crop management', 'Real-time sensor monitoring', 'AI-powered predictions'] };
 }
 
-function shell(language: EmailLanguage, title: string, body: string, dashboardUrl: string): { html: string; text: string } {
+function shell(language: EmailLanguage, title: string, body: string, dashboardUrl: string, actionUrl = dashboardUrl, actionLabel?: string): { html: string; text: string } {
   const l = labels(language);
+  const buttonLabel = actionLabel ?? l.open;
   const logoUrl = env.EMAIL_LOGO_URL?.trim();
   const logo = logoUrl ? `<img src="${escapeHtml(logoUrl)}" width="48" height="48" alt="SENSOURA logo" style="display:block;border:0;border-radius:12px;" />` : `<div style="font-size:28px;line-height:1;font-weight:800;color:#d8f3dc;">S</div>`;
-  const html = `<!doctype html><html lang="${language}" dir="${l.dir}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:#eef5ef;color:#173b2a;font-family:Arial,Helvetica,sans-serif;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef5ef;padding:24px 8px;"><tr><td align="center"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:640px;background:#ffffff;border-radius:18px;overflow:hidden;"><tr><td style="background:#123b2a;padding:28px 32px;">${logo}<div style="margin-top:16px;font-size:12px;letter-spacing:2px;color:#b9d9be;font-weight:700;">NASA ANALOG AGRICULTURE MISSION</div></td></tr><tr><td style="padding:32px;">${body}<table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:26px;"><tr><td style="border-radius:9px;background:#2d8a57;"><a href="${escapeHtml(dashboardUrl)}" style="display:inline-block;padding:14px 22px;color:#ffffff;text-decoration:none;font-weight:700;">${l.open}</a></td></tr></table></td></tr><tr><td style="background:#123b2a;padding:24px 32px;color:#d8f3dc;font-size:13px;line-height:1.6;">${l.footer}<br><span style="color:#a8cbb0;">${l.support}: ${escapeHtml(env.SMTP_FROM_EMAIL)}</span></td></tr></table></td></tr></table></body></html>`;
-  const text = `${title}\n\n${body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()}\n\n${l.open}: ${dashboardUrl}\n${l.support}: ${env.SMTP_FROM_EMAIL}`;
+  const html = `<!doctype html><html lang="${language}" dir="${l.dir}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:#eef5ef;color:#173b2a;font-family:Arial,Helvetica,sans-serif;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef5ef;padding:24px 8px;"><tr><td align="center"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:640px;background:#ffffff;border-radius:18px;overflow:hidden;"><tr><td style="background:#123b2a;padding:28px 32px;">${logo}<div style="margin-top:16px;font-size:12px;letter-spacing:2px;color:#b9d9be;font-weight:700;">NASA ANALOG AGRICULTURE MISSION</div></td></tr><tr><td style="padding:32px;">${body}<table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:26px;"><tr><td style="border-radius:9px;background:#2d8a57;"><a href="${escapeHtml(actionUrl)}" style="display:inline-block;padding:14px 22px;color:#ffffff;text-decoration:none;font-weight:700;">${escapeHtml(buttonLabel)}</a></td></tr></table><p style="margin-top:24px;font-size:12px;line-height:1.7;color:#607568;word-break:break-all;">${language === 'ar' ? 'إذا لم يعمل الزر، انسخ الرابط التالي إلى المتصفح:' : 'If the button does not work, copy this link into your browser:'}<br><a href="${escapeHtml(actionUrl)}" style="color:#2d8a57;">${escapeHtml(actionUrl)}</a></p></td></tr><tr><td style="background:#123b2a;padding:24px 32px;color:#d8f3dc;font-size:13px;line-height:1.6;">${l.footer}<br><span style="color:#a8cbb0;">${l.support}: ${escapeHtml(env.SMTP_FROM_EMAIL)}</span></td></tr></table></td></tr></table></body></html>`;
+  const text = `${title}\n\n${body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()}\n\n${buttonLabel}: ${actionUrl}\n${l.support}: ${env.SMTP_FROM_EMAIL}`;
   return { html, text };
 }
 
@@ -97,7 +99,14 @@ export function renderEmail(template: EmailTemplate, language: EmailLanguage, da
   const name = escapeHtml(textValue(data.name, language === 'ar' ? 'صديقنا' : 'there'));
   let subject: string;
   let body: string;
-  if (template === 'welcome') {
+  if (template === 'email-verification') {
+    const verificationLink = data.verificationLink?.trim();
+    if (!verificationLink) throw new Error('Verification link is required');
+    subject = language === 'ar' ? 'أكد بريدك الإلكتروني في SENSOURA' : 'Verify your SENSOURA email';
+    body = `<h1 style="margin:0 0 14px;font-size:30px;color:#123b2a;">${language === 'ar' ? 'مرحبًا بك في SENSOURA' : 'Welcome to SENSOURA'}</h1><p style="font-size:18px;line-height:1.7;margin:0 0 12px;">${l.greeting} ${name},</p><p style="font-size:16px;line-height:1.8;color:#496153;">${language === 'ar' ? 'اضغط الزر لتأكيد بريدك الإلكتروني وتفعيل حسابك للانضمام إلى لوحة الزراعة الذكية.' : 'Use the button to verify your email address and activate your account for the smart agriculture dashboard.'}</p>`;
+    const rendered = shell(language, subject, body, dashboardUrl, verificationLink, language === 'ar' ? 'تأكيد البريد الإلكتروني' : 'Verify Email');
+    return { subject, ...rendered };
+  } else if (template === 'welcome') {
     subject = language === 'ar' ? 'مرحبًا بك في SENSOURA' : 'Welcome to SENSOURA';
     body = `<h1 style="margin:0 0 14px;font-size:30px;color:#123b2a;">${l.welcome}</h1><p style="font-size:18px;line-height:1.7;margin:0 0 12px;">${l.greeting} ${name},</p><p style="font-size:16px;line-height:1.8;color:#496153;">${l.intro}</p><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:22px;"><tr>${l.features.map((feature) => `<td style="padding:14px 8px;background:#edf8ef;border:1px solid #d9eddd;font-size:13px;line-height:1.5;">${escapeHtml(feature)}</td>`).join('')}</tr></table>`;
   } else if (template === 'sensor-alert') {

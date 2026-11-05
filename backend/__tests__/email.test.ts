@@ -23,6 +23,16 @@ describe('transactional email service', () => {
     expect(en.text).toContain('Welcome to SENSOURA');
   });
 
+  it('renders a branded verification email with a safe button and fallback link', () => {
+    const link = 'https://on-an-official-team.firebaseapp.com/__/auth/action?mode=verifyEmail&oobCode=opaque';
+    const rendered = renderEmail('email-verification', 'en', { name: '<Grower>', verificationLink: link });
+    expect(rendered.subject).toContain('Verify');
+    expect(rendered.html).toContain('Verify Email');
+    expect(rendered.html).toContain(link.replaceAll('&', '&amp;'));
+    expect(rendered.html).toContain('&lt;Grower&gt;');
+    expect(rendered.text).toContain(link);
+  });
+
   it('renders preview without requiring SMTP credentials', () => {
     const preview = previewEmail('sensor-alert', 'en');
     expect(preview.subject).toContain('Sensor alert');
