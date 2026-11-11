@@ -1,0 +1,51 @@
+{
+  "rules": {
+    "Sensoura": {
+      ".read": "auth != null && auth.token.email_verified == true",
+      ".write": false,
+      "sensorData": {
+        ".read": "auth != null && auth.token.email_verified == true",
+        ".write": false,
+        ".validate": "newData.hasChildren(['lastUpdate'])"
+      },
+      "system": {
+        ".read": "auth != null && auth.token.email_verified == true",
+        ".write": false,
+        ".validate": "newData.hasChildren(['status', 'deviceId'])"
+      },
+      "commands": {
+        ".read": "auth != null && (auth.token.role == 'admin' || auth.token.role == 'operator')",
+        ".write": false
+      },
+      "commandResults": {
+        ".read": "auth != null && auth.token.email_verified == true",
+        ".write": false
+      },
+      "aiSuggestions": {
+        ".read": "auth != null && auth.token.email_verified == true",
+        ".write": false
+      },
+      "aiPredictions": {
+        ".read": "auth != null && auth.token.email_verified == true",
+        ".write": false
+      },
+      "AI_Predictions": {
+        ".read": "auth != null && auth.token.email_verified == true",
+        ".write": false
+      },
+      "AI_Suggestions": {
+        ".read": "auth != null && auth.token.email_verified == true",
+        ".write": false
+      },
+      "AI_Data": {
+        ".read": "auth != null && (auth.token.role == 'admin' || auth.token.role == 'operator')",
+        ".write": false
+      }
+    },
+    "$other": {
+      ".read": false,
+      ".write": false
+    }
+  }
+}
+

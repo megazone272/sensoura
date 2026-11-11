@@ -2,9 +2,40 @@ import { getLogger } from '../utils/logger.js';
 import { applicationDefault, cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth as getAdminAuth, type Auth as FirebaseAuth } from 'firebase-admin/auth';
 import { getDatabase as getAdminDatabase } from 'firebase-admin/database';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const logger = getLogger('firebase');
+
+export function findServiceAccountKey(keyPath?: string): string | null {
+  const currentDir = path.dirname(fileURLToPath(import.meta.url));
+  const candidates: (string | undefined)[] = [
+    keyPath,
+    keyPath ? path.resolve(process.cwd(), keyPath) : undefined,
+    keyPath ? path.resolve(process.cwd(), 'backend', keyPath) : undefined,
+    keyPath ? path.resolve(currentDir, '..', '..', keyPath) : undefined,
+    path.resolve(process.cwd(), 'serviceAccountKey.json'),
+    path.resolve(process.cwd(), 'backend', 'serviceAccountKey.json'),
+    path.resolve(currentDir, '../../serviceAccountKey.json'),
+    path.resolve(process.cwd(), 'backend', 'on-an-official-team-firebase-adminsdk-fbsvc-44374138e1.json'),
+    'C:/Users/nour/secrets/sensoura-firebase-admin.json',
+  ];
+
+  for (const candidate of candidates) {
+    if (candidate && existsSync(candidate)) {
+      try {
+        const content = JSON.parse(readFileSync(candidate, 'utf8'));
+        if (content && (content.project_id || content.client_email)) {
+          return candidate;
+        }
+      } catch {
+        // Continue searching
+      }
+    }
+  }
+  return null;
+}
 
 export type FirebaseCredentials =
   | { type: 'env'; projectId: string; clientEmail: string }
@@ -17,17 +48,25 @@ interface NormalizedCredentials {
 }
 
 export function resolveCredentials(): NormalizedCredentials | null {
-  const projectId = process.env.FIREBASE_PROJECT_ID;
-  const keyPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH ?? process.env.FIREBASE_SERVICE_ACCOUNT_KEY_PATH;
+  const resolvedKey = findServiceAccountKey(process.env.FIREBASE_SERVICE_ACCOUNT_PATH ?? process.env.FIREBASE_SERVICE_ACCOUNT_KEY_PATH);
+  let keyProjectId: string | undefined;
+  if (resolvedKey) {
+    try {
+      keyProjectId = JSON.parse(readFileSync(resolvedKey, 'utf8')).project_id;
+    } catch {
+      // ignore
+    }
+  }
+  const projectId = process.env.FIREBASE_PROJECT_ID ?? keyProjectId;
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
 
-  if (projectId && clientEmail && !keyPath) {
+  if (projectId && clientEmail && !resolvedKey) {
     logger.info({ projectId }, 'Using env-based Firebase credentials (clientEmail configured, no key path)');
     return { projectId, source: 'env' };
   }
 
-  if (projectId && keyPath) {
-    logger.info({ projectId, keyPath }, 'Using Firebase service account key path');
+  if (projectId && resolvedKey) {
+    logger.info({ projectId, keyPath: resolvedKey }, 'Using Firebase service account key path');
     return { projectId, source: 'keyfile' };
   }
 
@@ -51,7 +90,7 @@ export function isCredentialUsable(creds: NormalizedCredentials | null): boolean
     return Boolean(process.env.FIREBASE_PRIVATE_KEY);
   }
   if (creds.source === 'keyfile') {
-    return Boolean(process.env.FIREBASE_SERVICE_ACCOUNT_PATH ?? process.env.FIREBASE_SERVICE_ACCOUNT_KEY_PATH);
+    return Boolean(findServiceAccountKey(process.env.FIREBASE_SERVICE_ACCOUNT_PATH ?? process.env.FIREBASE_SERVICE_ACCOUNT_KEY_PATH));
   }
   return true;
 }
@@ -87,8 +126,8 @@ export function initializeFirebase(): void {
     return;
   }
 
-  const projectId = process.env.FIREBASE_PROJECT_ID;
-  const databaseURL = process.env.FIREBASE_DATABASE_URL;
+  const projectId = process.env.FIREBASE_PROJECT_ID ?? creds?.projectId;
+  const databaseURL = process.env.FIREBASE_DATABASE_URL ?? 'https://on-an-official-team-default-rtdb.europe-west1.firebasedatabase.app';
   if (!projectId || !databaseURL) {
     if (process.env.NODE_ENV === 'production') {
       throw new Error('FIREBASE_PROJECT_ID and FIREBASE_DATABASE_URL are required in production');
@@ -99,10 +138,10 @@ export function initializeFirebase(): void {
   }
 
   try {
-    const keyPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH ?? process.env.FIREBASE_SERVICE_ACCOUNT_KEY_PATH;
+    const resolvedKey = findServiceAccountKey(process.env.FIREBASE_SERVICE_ACCOUNT_PATH ?? process.env.FIREBASE_SERVICE_ACCOUNT_KEY_PATH);
     let credential;
-    if (keyPath) {
-      const serviceAccount = JSON.parse(readFileSync(keyPath, 'utf8'));
+    if (resolvedKey) {
+      const serviceAccount = JSON.parse(readFileSync(resolvedKey, 'utf8'));
       credential = cert(serviceAccount);
     } else if (process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
       credential = cert({

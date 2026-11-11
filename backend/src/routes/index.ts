@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { getLogger } from '../utils/logger.js';
 import { realtimeService } from '../services/realtime.js';
+import { isFirebaseEnabled } from '../services/firebase.js';
 import { aiEngine } from '../ai/engine.js';
 import { getEnv } from '../config/env.js';
 import { registerDeviceRoutes } from './device.js';
@@ -50,8 +51,13 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
   // Health check
   fastify.get('/health', async () => ({
     status: 'ok',
+    mission: env.MISSION_NAME,
+    phase: env.MISSION_PHASE,
+    team: env.TEAM_ID,
     timestamp: Date.now(),
     uptime: process.uptime(),
+    firebase: isFirebaseEnabled() ? 'sdk' : 'mock',
+    aiBackend: aiEngine.getModelInfo().backend,
   }));
 
   fastify.get('/ready', async (_request, reply) => {
@@ -59,6 +65,11 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
     const readiness = {
       ready: realtimeReady,
       timestamp: Date.now(),
+      services: {
+        realtime: realtimeReady,
+        ai: true,
+        socket: true,
+      },
     };
     if (!realtimeReady) return reply.code(503).send(readiness);
     return readiness;
@@ -114,6 +125,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
 
       try {
         const commandId = await realtimeService.sendCommand(parsed.data);
+        logger.info({ commandId, target: parsed.data.target, action: parsed.data.action, mode: parsed.data.mode, by: auth.userId, role: auth.role }, 'Hardware command dispatched');
         return { success: true, commandId };
       } catch (error) {
         logger.error({ err: error, by: auth.userId }, 'Failed to send command');
@@ -199,6 +211,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
           action: state,
           mode: 'MANUAL',
         });
+        logger.info({ commandId, state, reason, by: auth.userId, role: auth.role }, 'Relay hardware command dispatched');
         return { success: true, commandId, reason };
       } catch (error) {
         logger.error({ err: error, by: auth.userId }, 'Failed to control relay');
@@ -231,6 +244,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
           action,
           mode: 'MANUAL',
         });
+        logger.info({ commandId, action, by: auth.userId, role: auth.role }, 'Buzzer hardware command dispatched');
         return { success: true, commandId };
       } catch (error) {
         logger.error({ err: error, by: auth.userId }, 'Failed to control buzzer');
@@ -348,7 +362,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
           action: 'REBOOT',
           mode: 'MANUAL',
         });
-        logger.info({ by: auth.userId }, 'System reboot requested');
+        logger.info({ commandId, by: auth.userId, role: auth.role }, 'System reboot hardware command dispatched');
         return { success: true, commandId };
       } catch (error) {
         logger.error({ err: error, by: auth.userId }, 'Failed to send reboot command');
@@ -376,7 +390,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
           action: 'CALIBRATE',
           mode: 'MANUAL',
         });
-        logger.info({ by: auth.userId }, 'System calibration requested');
+        logger.info({ commandId, by: auth.userId, role: auth.role }, 'System calibration hardware command dispatched');
         return { success: true, commandId };
       } catch (error) {
         logger.error({ err: error, by: auth.userId }, 'Failed to send calibrate command');

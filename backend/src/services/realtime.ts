@@ -31,6 +31,20 @@ function defaultSystem(): SystemStatus {
   };
 }
 
+export function normalizeSensorPayload(raw: any): SensorData {
+  if (!raw || typeof raw !== 'object') return raw;
+  return {
+    AirTemp: typeof raw.AirTemp === 'number' ? raw.AirTemp : (typeof raw.temperature === 'number' ? raw.temperature : 0),
+    SoilTemp: typeof raw.SoilTemp === 'number' ? raw.SoilTemp : (typeof raw.soilTemperature === 'number' ? raw.soilTemperature : 0),
+    AirHumidity: typeof raw.AirHumidity === 'number' ? raw.AirHumidity : (typeof raw.humidity === 'number' ? raw.humidity : 0),
+    SoilMoisture: typeof raw.SoilMoisture === 'number' ? raw.SoilMoisture : (typeof raw.soilMoisture === 'number' ? raw.soilMoisture : 0),
+    VOC: typeof raw.VOC === 'number' ? raw.VOC : (typeof raw.gas === 'number' ? raw.gas : (typeof raw.voc === 'number' ? raw.voc : 0)),
+    Light: typeof raw.Light === 'number' ? raw.Light : (typeof raw.light === 'number' ? raw.light : 0),
+    Barometricpressure: typeof raw.Barometricpressure === 'number' ? raw.Barometricpressure : (typeof raw.airPressure === 'number' ? raw.airPressure : 1013.25),
+    lastUpdate: typeof raw.lastUpdate === 'number' ? raw.lastUpdate : Date.now(),
+  };
+}
+
 function safeCommandTarget(value: unknown): Command['target'] {
   return (value === 'pump' || value === 'buzzer' || value === 'led' || value === 'system') ? value : 'system';
 }
@@ -163,7 +177,8 @@ export class RealtimeService extends EventEmitter {
         const ref = db.ref(`/Sensoura/${path}`);
         const unsub = ref.on('value', (snap) => {
           this.sdkDataReceived = true;
-          const data = snap.val();
+          const raw = snap.val();
+          const data = (path === 'sensorData' && raw) ? normalizeSensorPayload(raw) : raw;
           this.currentState[path as keyof SensouraState] = data;
           if (path === 'sensorData' && data) {
             aiEngine.recordObservation(data as SensorData);

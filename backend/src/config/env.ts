@@ -1,4 +1,33 @@
 import { z } from 'zod';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+// ---------------------------------------------------------------------------
+// Load .env automatically if process.env hasn't already been populated
+// ---------------------------------------------------------------------------
+function tryLoadEnv(): void {
+  if (typeof process.loadEnvFile !== 'function') return;
+  const currentDir = path.dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    path.resolve(process.cwd(), '.env'),
+    path.resolve(process.cwd(), 'backend', '.env'),
+    path.resolve(currentDir, '../../.env'),
+    path.resolve(currentDir, '../../../.env'),
+  ];
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      try {
+        process.loadEnvFile(candidate);
+        break;
+      } catch {
+        // Continue to next candidate
+      }
+    }
+  }
+}
+
+tryLoadEnv();
 
 // ---------------------------------------------------------------------------
 // Schema
@@ -82,12 +111,40 @@ export const envSchema = z.object({
   MISSION_PHASE: z.string().default('LUNAR_ANALOG'),
   TEAM_ID: z.string().default('TEAM-MISSION-49'),
 }).superRefine((config, context) => {
-  if (config.NODE_ENV === 'production' && !config.DEVICE_AUTH_TOKEN) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['DEVICE_AUTH_TOKEN'],
-      message: 'DEVICE_AUTH_TOKEN (at least 32 characters) is required in production',
-    });
+  if (config.NODE_ENV === 'production') {
+    if (!config.DEVICE_AUTH_TOKEN || config.DEVICE_AUTH_TOKEN.length < 32) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['DEVICE_AUTH_TOKEN'],
+        message: 'DEVICE_AUTH_TOKEN (at least 32 characters) is required in production',
+      });
+    }
+
+    if (config.DEVICE_AUTH_TOKEN && (
+      config.DEVICE_AUTH_TOKEN.toLowerCase().includes('placeholder') ||
+      config.DEVICE_AUTH_TOKEN.toLowerCase().includes('change-in-production') ||
+      config.DEVICE_AUTH_TOKEN.toLowerCase().includes('your-secret') ||
+      config.DEVICE_AUTH_TOKEN.toLowerCase().includes('replace_me')
+    )) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['DEVICE_AUTH_TOKEN'],
+        message: 'Insecure DEVICE_AUTH_TOKEN: placeholder tokens are strictly forbidden in production',
+      });
+    }
+
+    if (config.JWT_SECRET && (
+      config.JWT_SECRET.toLowerCase().includes('placeholder') ||
+      config.JWT_SECRET.toLowerCase().includes('change-in-production') ||
+      config.JWT_SECRET.toLowerCase().includes('your-super-secret') ||
+      config.JWT_SECRET.toLowerCase().includes('replace_me')
+    )) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['JWT_SECRET'],
+        message: 'Insecure JWT_SECRET: placeholder secrets are strictly forbidden in production',
+      });
+    }
   }
 });
 

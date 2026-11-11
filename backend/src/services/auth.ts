@@ -497,7 +497,8 @@ export function buildSocketAuthContext(
   // Client-supplied role claims are not trusted for authorization.
   const requestedRole = clientRole === 'device' ? 'device' : undefined;
 
-  if (deviceId && (devTokenRegistry.has(`device:${deviceId}`) || devTokenRegistry.has(deviceId))) {
+  // Development bypass is strictly disabled when isDevAuthEnabled() is false (e.g. production)
+  if (isDevAuthEnabled() && deviceId && (devTokenRegistry.has(`device:${deviceId}`) || devTokenRegistry.has(deviceId))) {
     return {
       userId: `device-${deviceId}`,
       role: 'device',
@@ -509,7 +510,7 @@ export function buildSocketAuthContext(
     };
   }
 
-  if (token) {
+  if (isDevAuthEnabled() && token) {
     const tokenAuth = verifyToken(
       { headers: { authorization: `Bearer ${token}` } } as unknown as FastifyRequest,
       devTokenRegistry,
