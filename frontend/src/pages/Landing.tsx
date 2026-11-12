@@ -7,10 +7,12 @@ import {
   Droplets,
   Globe2,
   Leaf,
+  Menu,
   ShieldCheck,
   Sun,
   Thermometer,
   Waves,
+  X,
 } from 'lucide-react';
 import { getPreferredLanguage, savePreferredLanguage, type Language } from '@services/language';
 import { ThemeToggle } from '@components/ThemeToggle';
@@ -151,6 +153,7 @@ const steps = [
 
 export function Landing() {
   const [language, setLanguage] = useState<Language>(getPreferredLanguage);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const t = copy[language];
   const isArabic = language === 'ar';
   const toggleLanguage = () => {
@@ -199,8 +202,61 @@ export function Landing() {
               <span className="sm:hidden">{isArabic ? 'حساب' : 'Join'}</span>
               <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
             </Link>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm md:hidden p-1.5"
+              onClick={() => setMobileMenuOpen((prev) => !prev)}
+              aria-label={mobileMenuOpen ? (isArabic ? 'إغلاق القائمة' : 'Close menu') : (isArabic ? 'فتح القائمة' : 'Open menu')}
+              aria-expanded={mobileMenuOpen}
+            >
+              {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </button>
           </div>
         </div>
+        {mobileMenuOpen && (
+          <div className="border-t border-[var(--border-primary)] bg-[var(--bg-secondary)] px-4 py-4 md:hidden">
+            <nav className="flex flex-col gap-3 text-sm font-medium" aria-label={isArabic ? 'قائمة الجوال' : 'Mobile navigation'}>
+              <a
+                className="py-2 text-[var(--text-secondary)] transition hover:text-[var(--text-primary)]"
+                href="#features"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                {t.navFeatures}
+              </a>
+              <a
+                className="py-2 text-[var(--text-secondary)] transition hover:text-[var(--text-primary)]"
+                href="#how-it-works"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                {t.navHow}
+              </a>
+              <a
+                className="py-2 text-[var(--text-secondary)] transition hover:text-[var(--text-primary)]"
+                href="#about"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                {t.navAbout}
+              </a>
+              <div className="mt-2 flex flex-col gap-2 pt-3 border-t border-[var(--border-primary)]">
+                <Link
+                  to="/login"
+                  className="btn btn-secondary btn-sm justify-center py-2"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  {t.signIn}
+                </Link>
+                <Link
+                  to="/signup"
+                  className="btn btn-primary btn-sm justify-center py-2"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  {t.signUp}
+                  <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+                </Link>
+              </div>
+            </nav>
+          </div>
+        )}
       </header>
 
       <section className="relative isolate">

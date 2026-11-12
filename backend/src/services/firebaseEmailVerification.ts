@@ -20,7 +20,7 @@ export class FirebaseEmailVerificationError extends Error {
 function frontendContinueUrl(): string {
   const origin = env.FRONTEND_URL.split(',').map((item) => item.trim()).find(Boolean);
   if (!origin) throw new FirebaseEmailVerificationError(503, 'Verification email is not configured');
-  return new URL('/login?emailVerified=1', origin).toString();
+  return new URL('/verify-email?status=success', origin).toString();
 }
 
 function prune(now: number): void {

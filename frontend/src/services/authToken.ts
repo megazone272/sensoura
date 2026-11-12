@@ -392,3 +392,45 @@ export function signInWithGoogle(): Promise<void> {
 export function signOut(): void {
   clearAuthSession();
 }
+
+export async function checkFirebaseActionCode(oobCode: string): Promise<{ email: string; operation: string }> {
+  if (!FIREBASE_API_KEY) {
+    throw new Error('Firebase configuration missing. Set VITE_FIREBASE_API_KEY for this build.');
+  }
+  const [appSdk, authSdk] = await Promise.all([
+    import('firebase/app'),
+    import('firebase/auth'),
+  ]);
+  const appName = 'sensoura-action-code-app';
+  const app = appSdk.getApps().find((candidate) => candidate.name === appName)
+    ?? appSdk.initializeApp({
+      apiKey: FIREBASE_API_KEY,
+      authDomain: FIREBASE_AUTH_DOMAIN || undefined,
+      projectId: FIREBASE_PROJECT_ID || undefined,
+    }, appName);
+  const auth = authSdk.getAuth(app);
+  const info = await authSdk.checkActionCode(auth, oobCode);
+  return {
+    email: info.data.email || '',
+    operation: info.operation,
+  };
+}
+
+export async function applyFirebaseActionCode(oobCode: string): Promise<void> {
+  if (!FIREBASE_API_KEY) {
+    throw new Error('Firebase configuration missing. Set VITE_FIREBASE_API_KEY for this build.');
+  }
+  const [appSdk, authSdk] = await Promise.all([
+    import('firebase/app'),
+    import('firebase/auth'),
+  ]);
+  const appName = 'sensoura-action-code-app';
+  const app = appSdk.getApps().find((candidate) => candidate.name === appName)
+    ?? appSdk.initializeApp({
+      apiKey: FIREBASE_API_KEY,
+      authDomain: FIREBASE_AUTH_DOMAIN || undefined,
+      projectId: FIREBASE_PROJECT_ID || undefined,
+    }, appName);
+  const auth = authSdk.getAuth(app);
+  await authSdk.applyActionCode(auth, oobCode);
+}

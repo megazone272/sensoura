@@ -2,6 +2,7 @@ import nodemailer, { type Transporter } from 'nodemailer';
 import { z } from 'zod';
 import { getEnv } from '../config/env.js';
 import { getLogger } from '../utils/logger.js';
+import { renderPremiumVerificationEmail } from './verificationEmailTemplate.js';
 
 const env = getEnv();
 const logger = getLogger('email');
@@ -23,6 +24,7 @@ export interface EmailData {
   action?: string;
   message?: string;
   verificationLink?: string;
+  assetBaseUrl?: string;
 }
 
 export interface EmailDeliveryRecord {
@@ -100,12 +102,7 @@ export function renderEmail(template: EmailTemplate, language: EmailLanguage, da
   let subject: string;
   let body: string;
   if (template === 'email-verification') {
-    const verificationLink = data.verificationLink?.trim();
-    if (!verificationLink) throw new Error('Verification link is required');
-    subject = language === 'ar' ? 'أكد بريدك الإلكتروني في SENSOURA' : 'Verify your SENSOURA email';
-    body = `<h1 style="margin:0 0 14px;font-size:30px;color:#123b2a;">${language === 'ar' ? 'مرحبًا بك في SENSOURA' : 'Welcome to SENSOURA'}</h1><p style="font-size:18px;line-height:1.7;margin:0 0 12px;">${l.greeting} ${name},</p><p style="font-size:16px;line-height:1.8;color:#496153;">${language === 'ar' ? 'اضغط الزر لتأكيد بريدك الإلكتروني وتفعيل حسابك للانضمام إلى لوحة الزراعة الذكية.' : 'Use the button to verify your email address and activate your account for the smart agriculture dashboard.'}</p>`;
-    const rendered = shell(language, subject, body, dashboardUrl, verificationLink, language === 'ar' ? 'تأكيد البريد الإلكتروني' : 'Verify Email');
-    return { subject, ...rendered };
+    return renderPremiumVerificationEmail(language, data);
   } else if (template === 'welcome') {
     subject = language === 'ar' ? 'مرحبًا بك في SENSOURA' : 'Welcome to SENSOURA';
     body = `<h1 style="margin:0 0 14px;font-size:30px;color:#123b2a;">${l.welcome}</h1><p style="font-size:18px;line-height:1.7;margin:0 0 12px;">${l.greeting} ${name},</p><p style="font-size:16px;line-height:1.8;color:#496153;">${l.intro}</p><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:22px;"><tr>${l.features.map((feature) => `<td style="padding:14px 8px;background:#edf8ef;border:1px solid #d9eddd;font-size:13px;line-height:1.5;">${escapeHtml(feature)}</td>`).join('')}</tr></table>`;
@@ -133,7 +130,15 @@ function smtpConfigured(): boolean {
 function getTransporter(): Transporter | null {
   if (transporter) return transporter;
   if (!smtpConfigured()) return null;
-  transporter = nodemailer.createTransport({ host: env.SMTP_HOST, port: env.SMTP_PORT, secure: env.SMTP_SECURE, auth: { user: env.SMTP_USER, pass: env.SMTP_PASS } });
+  transporter = nodemailer.createTransport({
+    host: env.SMTP_HOST,
+    port: env.SMTP_PORT,
+    secure: env.SMTP_SECURE,
+    tls: {
+      servername: env.SMTP_HOST === 'host.containers.internal' ? 'mail.sensoura.ox0x.com' : undefined,
+    },
+    auth: { user: env.SMTP_USER, pass: env.SMTP_PASS },
+  });
   return transporter;
 }
 
@@ -178,7 +183,11 @@ export async function sendEmail(recipient: string, template: EmailTemplate, lang
 }
 
 export function previewEmail(template: EmailTemplate, language: EmailLanguage): { subject: string; html: string; text: string } {
-  return renderEmail(template, language, { name: language === 'ar' ? 'ضيف SENSOURA' : 'SENSOURA guest', dashboardUrl: trustedDashboardUrl() });
+  return renderEmail(template, language, {
+    name: language === 'ar' ? 'ضيف SENSOURA' : 'SENSOURA guest',
+    dashboardUrl: trustedDashboardUrl(),
+    verificationLink: `${trustedDashboardUrl()}/login?emailVerified=1`,
+  });
 }
 
 export const emailSchemas = { emailAddress: emailAddressSchema, template: templateSchema, language: languageSchema };

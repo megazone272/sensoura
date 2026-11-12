@@ -811,6 +811,16 @@ body { background: radial-gradient(ellipse at 88% 0%, color-mix(in srgb, var(--a
   .history-controls .form-field { flex: 1 1 140px; }
   .history-record-count { margin-inline-start: 0; }
 }
+@media (max-width: 380px) {
+  .dashboard-hero { padding: 16px; }
+  .dashboard-hero-reading { position: static; margin: 16px auto 0 auto; width: 115px; height: 115px; }
+  .dashboard-hero-copy { padding-inline-end: 0; }
+  [dir='rtl'] .dashboard-hero-copy { padding-inline-start: 0; }
+  .metric-grid { grid-template-columns: 1fr; }
+  .sensor-reading-grid { grid-template-columns: 1fr; }
+  .system-summary-grid { grid-template-columns: 1fr; }
+  .topbar-search-wrap { width: min(34vw, 130px); }
+}
 .topbar-page-context { display: flex; align-items: center; gap: 9px; min-width: 0; color: var(--text-muted); font-size: .7rem; white-space: nowrap; }
 .topbar-page-context strong { max-width: min(18vw, 220px); overflow: hidden; color: var(--text-primary); font-size: .8rem; text-overflow: ellipsis; }
 .topbar-page-context span:first-child { color: var(--accent-primary); font-family: var(--font-mono); font-size: .64rem; font-weight: 800; letter-spacing: .08em; }

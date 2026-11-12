@@ -1,7 +1,10 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { getEnv } from '../config/env.js';
 import { requirePrivileged, resolveCaptured } from '../services/auth.js';
 import { emailSchemas, getEmailStatus, previewEmail, sendEmail, verifySmtpConnection } from '../services/email.js';
+
+const env = getEnv();
 
 const testEmailSchema = z.object({
   recipient: emailSchemas.emailAddress,
@@ -42,7 +45,11 @@ export function registerEmailRoutes(fastify: FastifyInstance): void {
     const parsed = testEmailSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Invalid test email request', details: parsed.error.flatten() });
     try {
-      const record = await sendEmail(parsed.data.recipient, parsed.data.template, parsed.data.language, { name: parsed.data.recipient.split('@')[0] });
+      const defaultDomain = env.FRONTEND_URL.split(',')[0]?.trim() || 'https://sensoura.ox0x.com';
+      const record = await sendEmail(parsed.data.recipient, parsed.data.template, parsed.data.language, {
+        name: parsed.data.recipient.split('@')[0],
+        verificationLink: parsed.data.template === 'email-verification' ? `${defaultDomain}/login?emailVerified=1` : undefined,
+      });
       return { success: true, delivery: record };
     } catch {
       return reply.code(503).send({ error: 'Email test could not be accepted by the SMTP server' });

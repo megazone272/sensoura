@@ -102,3 +102,4 @@ The compiled rules file resides at `d:\sensoura\database.rules.json`:
 
 **Final Rating: PRODUCTION READY (Grade: A)**  
 No high or critical vulnerabilities exist. Dev tokens are completely disabled. Hardware actuation is shielded with strict RBAC, rate-limiting, and audit logging.
+

@@ -43,8 +43,12 @@ function runNpm(args, cwd, extraEnv = {}) {
 }
 
 try {
-  console.log('\n[1/4] Installing frontend dependencies...');
-  runNpm(['ci', '--include=dev'], frontendDir);
+  if (!existsSync(path.join(frontendDir, 'node_modules'))) {
+    console.log('\n[1/4] Installing frontend dependencies...');
+    runNpm(['ci', '--include=dev'], frontendDir);
+  } else {
+    console.log('\n[1/4] Frontend dependencies already installed, skipping reinstall...');
+  }
 
   console.log('\n[2/4] Building frontend...');
   runNpm(['run', 'build'], frontendDir, {

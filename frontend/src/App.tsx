@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { Layout } from './components/Layout';
 import { Login } from './pages/Login';
 import { Landing } from './pages/Landing';
+import { EmailVerification } from './pages/EmailVerification';
 import { Dashboard } from './pages/Dashboard';
 import { Sensors } from './pages/Sensors';
 import { Commands } from './pages/Commands';
@@ -52,6 +53,8 @@ function App() {
             <Route path="/" element={<Landing />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Login initialMode="sign-up" />} />
+            <Route path="/verify-email" element={<EmailVerification />} />
+            <Route path="/auth/action" element={<EmailVerification />} />
             <Route element={<RequireAuth><Layout /></RequireAuth>}>
               <Route path="dashboard" element={<Dashboard />} />
               <Route path="sensors" element={<Sensors />} />

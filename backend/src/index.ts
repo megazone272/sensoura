@@ -37,6 +37,7 @@ async function buildApp() {
   await app.register(fastifyHelmet, {
     contentSecurityPolicy: false,
     crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: 'same-origin' },
     crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
   });
 
@@ -72,6 +73,13 @@ async function buildApp() {
       root: frontendRoot,
       prefix: '/',
       index: ['index.html'],
+      setHeaders: (res, pathName) => {
+        // Grant cross-origin resource policy only to public image & font assets
+        if (/\.(png|jpe?g|svg|webp|ico|woff2?|gif)$/i.test(pathName)) {
+          res.header('Cross-Origin-Resource-Policy', 'cross-origin');
+          res.header('Access-Control-Allow-Origin', '*');
+        }
+      },
     });
 
     logger.info({ frontendRoot }, 'Frontend static files registered');
