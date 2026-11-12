@@ -586,10 +586,8 @@ This project is part of the NASA Competition. All rights reserved.
 
 ## 👥 Team
 
-**Team ID**: TEAM-MISSION-49
-**Mission Phase**: LUNAR_ANALOG
+**Team ID**: 5 On An Offical Mission
 **Email**: missionofficial49@gmail.com
-
 ---
 
 ## 🙏 Acknowledgments
