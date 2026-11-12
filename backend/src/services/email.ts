@@ -186,7 +186,7 @@ export function previewEmail(template: EmailTemplate, language: EmailLanguage): 
   return renderEmail(template, language, {
     name: language === 'ar' ? 'ضيف SENSOURA' : 'SENSOURA guest',
     dashboardUrl: trustedDashboardUrl(),
-    verificationLink: `${trustedDashboardUrl()}/login?emailVerified=1`,
+    verificationLink: `${trustedDashboardUrl()}/auth/action`,
   });
 }
 

@@ -48,7 +48,7 @@ export function registerEmailRoutes(fastify: FastifyInstance): void {
       const defaultDomain = env.FRONTEND_URL.split(',')[0]?.trim() || 'https://sensoura.ox0x.com';
       const record = await sendEmail(parsed.data.recipient, parsed.data.template, parsed.data.language, {
         name: parsed.data.recipient.split('@')[0],
-        verificationLink: parsed.data.template === 'email-verification' ? `${defaultDomain}/login?emailVerified=1` : undefined,
+        verificationLink: parsed.data.template === 'email-verification' ? `${defaultDomain}/auth/action` : undefined,
       });
       return { success: true, delivery: record };
     } catch {

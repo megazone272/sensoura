@@ -66,17 +66,18 @@ try {
     throw new Error('Backend build did not produce dist/index.js');
   }
 
-  console.log('\n[4/4] Copying frontend into backend/dist/public...');
-  rmSync(publicDir, { recursive: true, force: true });
-  mkdirSync(publicDir, { recursive: true });
-  cpSync(frontendDist, publicDir, { recursive: true });
-
-  if (!existsSync(path.join(publicDir, 'index.html'))) {
-    throw new Error('Frontend index.html missing from dist/public');
+  console.log('\n[4/4] Copying frontend into backend/dist/public and backend/public...');
+  const rootPublic = path.join(backendDir, 'public');
+  for (const targetDir of [publicDir, rootPublic]) {
+    mkdirSync(targetDir, { recursive: true });
+    cpSync(frontendDist, targetDir, { recursive: true });
+    if (!existsSync(path.join(targetDir, 'index.html'))) {
+      throw new Error(`Frontend index.html missing from ${targetDir}`);
+    }
   }
 
   console.log('\nSENSOURA production build completed successfully.');
-  console.log('Frontend location: dist/public');
+  console.log('Frontend location: dist/public and public');
 
 } catch (error) {
   console.error('\nSENSOURA build failed:', error);

@@ -22,9 +22,11 @@ const env = getEnv();
 const frontendOrigins = env.FRONTEND_URL.split(',').map((origin) => origin.trim()).filter(Boolean);
 const logger = getLogger('main');
 
-// Frontend build location: backend/public
+// Frontend build location: check dist/public first, fallback to ../public
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
-const frontendRoot = path.resolve(currentDir, '../public');
+const distPublic = path.resolve(currentDir, 'public');
+const rootPublic = path.resolve(currentDir, '../public');
+const frontendRoot = existsSync(path.join(distPublic, 'index.html')) ? distPublic : rootPublic;
 const frontendIndexPath = path.join(frontendRoot, 'index.html');
 
 async function buildApp() {
