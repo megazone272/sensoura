@@ -6,6 +6,8 @@ export interface SensorData {
   VOC: number;
   Light: number;
   Barometricpressure: number;
+  BarometricPressure?: number;
+  Altitude?: number;
   lastUpdate: number;
 }
 
@@ -21,7 +23,7 @@ export interface SystemStatus {
 export interface RelayState {
   mode: 'AUTO' | 'MANUAL';
   state: 'ON' | 'OFF';
-  reason: 'boot' | 'soil_dry' | 'scheduled' | 'manual' | 'ai_predicted' | 'emergency' | 'threshold_met' | 'network-failsafe';
+  reason: 'boot' | 'soil_dry' | 'scheduled' | 'manual' | 'manual_override' | 'ai_predicted' | 'emergency' | 'threshold_met' | 'network-failsafe';
   lastAction: number;
 }
 
@@ -54,29 +56,46 @@ export interface CommandResult {
 }
 
 export interface AISuggestion {
-  type: 'irrigation' | 'environment' | 'maintenance' | 'anomaly' | 'optimization' | 'harvest';
+  type: 'irrigation' | 'environment' | 'maintenance' | 'anomaly' | 'optimization' | 'harvest' | string;
   suggestion: string;
   reason: string;
   recommendedAction: {
     target: string;
-    action: string;
-    mode: 'MANUAL' | 'AUTO' | null;
+    action?: string;
+    mode?: 'MANUAL' | 'AUTO' | null;
   };
-  status: 'pending' | 'approved' | 'rejected' | 'executed' | 'expired';
-  requiresApproval: boolean;
-  confidence: number;
-  createdAt: number;
-  expiresAt: number;
+  status?: 'pending' | 'approved' | 'rejected' | 'executed' | 'expired' | string;
+  requiresApproval?: boolean;
+  confidence?: number;
+  createdAt?: number;
+  expiresAt?: number;
   id?: string;
   metadata?: Record<string, any>;
 }
 
+export interface AIPrediction {
+  type: string;
+  predictedValue: string | number;
+  confidence: number;
+  predictionTime: number;
+  id?: string;
+}
+
+export interface LocationInfo {
+  latitude: number;
+  longitude: number;
+  city: string;
+  country: string;
+}
+
 export interface SensouraState {
+  location?: LocationInfo;
   sensorData: SensorData;
   system: SystemStatus;
   commands: Record<string, Command>;
   commandResults: Record<string, CommandResult>;
   aiSuggestions: Record<string, AISuggestion>;
+  aiPredictions?: Record<string, AIPrediction>;
 }
 
 // Validation schemas using Zod
@@ -89,7 +108,9 @@ export const sensorDataSchema = z.object({
   SoilMoisture: z.number().min(0).max(100),
   VOC: z.number().min(0).max(10000),
   Light: z.number().min(0).max(200000),
-  Barometricpressure: z.number().min(800).max(1200),
+  Barometricpressure: z.number().min(800).max(1200).default(1013.25),
+  BarometricPressure: z.number().min(800).max(1200).optional(),
+  Altitude: z.number().min(-500).max(10000).optional(),
   lastUpdate: z.number(),
 });
 
@@ -102,7 +123,7 @@ export const systemStatusSchema = z.object({
   relay: z.object({
     mode: z.enum(['AUTO', 'MANUAL']),
     state: z.enum(['ON', 'OFF']),
-    reason: z.enum(['boot', 'soil_dry', 'scheduled', 'manual', 'ai_predicted', 'emergency', 'threshold_met', 'network-failsafe']),
+    reason: z.enum(['boot', 'soil_dry', 'scheduled', 'manual', 'manual_override', 'ai_predicted', 'emergency', 'threshold_met', 'network-failsafe']),
     lastAction: z.number(),
   }),
   buzzer: z.object({ muted: z.boolean() }),
@@ -118,7 +139,7 @@ export const deviceTelemetrySchema = z.object({
     relay: z.object({
       mode: z.enum(['AUTO', 'MANUAL']),
       state: z.enum(['ON', 'OFF']),
-      reason: z.enum(['boot', 'soil_dry', 'scheduled', 'manual', 'ai_predicted', 'emergency', 'threshold_met', 'network-failsafe']),
+      reason: z.enum(['boot', 'soil_dry', 'scheduled', 'manual', 'manual_override', 'ai_predicted', 'emergency', 'threshold_met', 'network-failsafe']),
       lastAction: z.number().int().nonnegative(),
     }).strict(),
     buzzer: z.object({ muted: z.boolean() }).strict(),

@@ -1,4 +1,10 @@
 {
+  "location": {
+    "latitude": 30.044444,
+    "longitude": 31.235833,
+    "city": "Cairo",
+    "country": "Egypt"
+  },
   "sensorData": {
     "AirTemp": 28.4,
     "SoilTemp": 22.5,
@@ -6,7 +12,7 @@
     "SoilMoisture": 24.0,
     "VOC": 185,
     "Light": 60,
-    "Barometricpressure": 1013.25,
+    "BarometricPressure": 1013.25,
     "lastUpdate": 1791864000000
   },
   "system": {
@@ -14,13 +20,13 @@
     "lastSeen": 1791864000000,
     "deviceId": "sensoura-esp32-01",
     "relay": {
-      "mode": "AUTO",
-      "state": "ON",
-      "reason": "soil_dry",
-      "lastAction": 1791864000000
+      "mode": "MANUAL",
+      "state": "OFF",
+      "reason": "manual_override",
+      "lastAction": 1791864021000
     },
     "buzzer": {
-      "muted": false
+      "muted": true
     },
     "leds": {
       "green": false,
@@ -37,13 +43,13 @@
     "1043": {
       "target": "buzzer",
       "action": "MUTE",
-      "timestamp": 1791864001000
+      "timestamp": 1791864010000
     },
     "1044": {
       "target": "pump",
       "action": "OFF",
       "mode": "MANUAL",
-      "timestamp": 1791864002000
+      "timestamp": 1791864020000
     }
   },
   "commandResults": {
@@ -61,7 +67,7 @@
       "requestedAction": "MUTE",
       "actualState": "MUTED",
       "message": "Buzzer muted successfully",
-      "timestamp": 1791864002000
+      "timestamp": 1791864011000
     },
     "1044": {
       "status": "executed",
@@ -69,7 +75,7 @@
       "requestedAction": "OFF",
       "actualState": "OFF",
       "message": "Pump turned off successfully",
-      "timestamp": 1791864003000
+      "timestamp": 1791864021000
     }
   },
   "aiSuggestions": {
@@ -81,25 +87,16 @@
         "target": "pump",
         "action": "ON",
         "mode": "MANUAL"
-      },
-      "status": "pending",
-      "requiresApproval": true,
-      "createdAt": 1791864000000,
-      "expiresAt": 1791867600000
+      }
     },
     "2002": {
       "type": "environment",
       "suggestion": "Check the gas sensor readings",
       "reason": "The gas reading is approaching the configured warning threshold",
       "recommendedAction": {
-        "target": "gasSensor",
-        "action": "CHECK_SENSOR",
-        "mode": null
+        "target": "No action required"
       },
-      "status": "pending",
-      "requiresApproval": true,
-      "createdAt": 1791864010000,
-      "expiresAt": 1791867610000
+      "createdAt": 1791864010000
     }
   },
   "aiPredictions": {

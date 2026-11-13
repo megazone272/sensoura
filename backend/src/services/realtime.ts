@@ -1,6 +1,6 @@
 import { getDatabase, isFirebaseEnabled } from './firebase.js';
 import { getLogger } from '../utils/logger.js';
-import type { SensorData, SystemStatus, Command, CommandResult, AISuggestion, SensouraState, RelayState, BuzzerState } from '../models/sensoura.js';
+import type { SensorData, SystemStatus, Command, CommandResult, AISuggestion, AIPrediction, LocationInfo, SensouraState, RelayState, BuzzerState } from '../models/sensoura.js';
 import { aiEngine } from '../ai/engine.js';
 import { EventEmitter } from 'events';
 
@@ -33,6 +33,12 @@ function defaultSystem(): SystemStatus {
 
 export function normalizeSensorPayload(raw: any): SensorData {
   if (!raw || typeof raw !== 'object') return raw;
+  const pressure = typeof raw.BarometricPressure === 'number'
+    ? raw.BarometricPressure
+    : (typeof raw.Barometricpressure === 'number'
+      ? raw.Barometricpressure
+      : (typeof raw.airPressure === 'number' ? raw.airPressure : 1013.25));
+
   return {
     AirTemp: typeof raw.AirTemp === 'number' ? raw.AirTemp : (typeof raw.temperature === 'number' ? raw.temperature : 0),
     SoilTemp: typeof raw.SoilTemp === 'number' ? raw.SoilTemp : (typeof raw.soilTemperature === 'number' ? raw.soilTemperature : 0),
@@ -40,7 +46,9 @@ export function normalizeSensorPayload(raw: any): SensorData {
     SoilMoisture: typeof raw.SoilMoisture === 'number' ? raw.SoilMoisture : (typeof raw.soilMoisture === 'number' ? raw.soilMoisture : 0),
     VOC: typeof raw.VOC === 'number' ? raw.VOC : (typeof raw.gas === 'number' ? raw.gas : (typeof raw.voc === 'number' ? raw.voc : 0)),
     Light: typeof raw.Light === 'number' ? raw.Light : (typeof raw.light === 'number' ? raw.light : 0),
-    Barometricpressure: typeof raw.Barometricpressure === 'number' ? raw.Barometricpressure : (typeof raw.airPressure === 'number' ? raw.airPressure : 1013.25),
+    Barometricpressure: pressure,
+    BarometricPressure: pressure,
+    ...(typeof raw.Altitude === 'number' ? { Altitude: raw.Altitude } : (typeof raw.altitude === 'number' ? { Altitude: raw.altitude } : {})),
     lastUpdate: typeof raw.lastUpdate === 'number' ? raw.lastUpdate : Date.now(),
   };
 }
@@ -95,12 +103,17 @@ export class RealtimeService extends EventEmitter {
           VOC: 185 + Math.floor((Math.random() - 0.5) * 20),
           Light: 720 + Math.floor((Math.random() - 0.5) * 100),
           Barometricpressure: 1013.25 + (Math.random() - 0.5) * 5,
+          Altitude: 110.88,
           lastUpdate: Date.now(),
         },
         system: defaultSystem(),
         commands: {},
         commandResults: {},
         aiSuggestions: {},
+        aiPredictions: {
+          '3001': { type: 'rainfall', predictedValue: 'after 2 days afternoon', confidence: 0.85, predictionTime: 1791867600000 },
+          '3002': { type: 'air_temp', predictedValue: 30.0, confidence: 0.9, predictionTime: 1791867600000 },
+        },
       };
       // Simulate live sensor updates
       this.mockTimer = setInterval(() => this.simulateSensorUpdate(), 5000);
@@ -172,7 +185,7 @@ export class RealtimeService extends EventEmitter {
       const db = getDatabase();
       if (!db) return;
 
-      const paths = ['sensorData', 'system', 'commands', 'commandResults', 'aiSuggestions'];
+      const paths = ['sensorData', 'system', 'commands', 'commandResults', 'aiSuggestions', 'aiPredictions', 'location'];
       for (const path of paths) {
         const ref = db.ref(`/Sensoura/${path}`);
         const unsub = ref.on('value', (snap) => {
@@ -246,6 +259,14 @@ export class RealtimeService extends EventEmitter {
     return this.currentState.aiSuggestions ?? {};
   }
 
+  getAIPredictions(): Record<string, AIPrediction> {
+    return this.currentState.aiPredictions ?? {};
+  }
+
+  getLocation(): LocationInfo | null {
+    return this.currentState.location ?? null;
+  }
+
   // Mutations
   async sendCommand(command: Omit<Command, 'id' | 'timestamp'>): Promise<string> {
     const id = `cmd_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -295,7 +316,7 @@ export class RealtimeService extends EventEmitter {
     if (suggestion.status !== 'pending') throw new Error(`Suggestion is already ${suggestion.status}`);
     if (this.suggestionActionsInProgress.has(suggestionId)) throw new Error('Suggestion action is already in progress');
 
-    if (suggestion.expiresAt <= Date.now()) {
+    if (suggestion.expiresAt && suggestion.expiresAt <= Date.now()) {
       suggestion.status = 'expired';
       suggestion.requiresApproval = false;
       if (isFirebaseEnabled()) {
@@ -342,7 +363,7 @@ export class RealtimeService extends EventEmitter {
 
     this.suggestionActionsInProgress.add(suggestionId);
     try {
-      if (suggestion.expiresAt <= Date.now()) {
+      if (suggestion.expiresAt && suggestion.expiresAt <= Date.now()) {
         suggestion.status = 'expired';
         suggestion.requiresApproval = false;
         if (isFirebaseEnabled()) {

@@ -55,6 +55,9 @@ export const endpoints = {
   getModelInfo: () => api.get('/ai/model-info'),
   retrainModels: () => api.post('/ai/retrain', {}),
 
+  getCropRotation: () => api.get('/ai/crop-rotation'),
+  evaluateCropRotation: (context: { soilType?: string; primaryGoal?: string; currentCropId?: string }) => api.post('/ai/crop-rotation/evaluate', context),
+
   getHistory: (params?: { from?: string; to?: string; limit?: number }) => api.get('/history/sensor-data', { params }),
   getClimateCurrent: () => api.get('/climate/current'),
   getClimateHistory: (params: { start: string; end: string }) => api.get('/climate/history', { params }),

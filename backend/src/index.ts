@@ -16,6 +16,7 @@ import { realtimeService } from './services/realtime.js';
 import { initializeSocketIO } from './socket/index.js';
 import { registerRoutes } from './routes/index.js';
 import { registerClimateRoutes } from './routes/climate.js';
+import { registerCropRotationRoutes } from './routes/cropRotation.js';
 import { aiEngine } from './ai/engine.js';
 
 const env = getEnv();
@@ -68,6 +69,7 @@ async function buildApp() {
   // API Routes
   await registerRoutes(app);
   await registerClimateRoutes(app);
+  await registerCropRotationRoutes(app);
 
   // Serve the frontend build if available
   if (existsSync(frontendIndexPath)) {

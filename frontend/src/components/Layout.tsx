@@ -18,6 +18,7 @@ const navigation = [
   { path: '/irrigation', label: 'navIrrigation', icon: Droplets, group: 'control' },
   { path: '/commands', label: 'navCommands', icon: Terminal, group: 'control' },
   { path: '/ai-suggestions', label: 'navAI', icon: Brain, group: 'control' },
+  { path: '/crop-rotation', label: 'navCropRotation', icon: Sprout, group: 'control' },
   { path: '/health', label: 'navHealth', icon: ShieldCheck, group: 'system' },
   { path: '/settings', label: 'navSettings', icon: Settings, group: 'system' },
 ] as const;

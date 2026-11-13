@@ -58,7 +58,7 @@ export function Sensors() {
       const next = { ...current };
       for (const item of readings) {
         const value = sensorData[item.key];
-        if (Number.isFinite(value)) next[item.key] = [...(current[item.key] ?? []).slice(-23), value];
+        if (typeof value === 'number' && Number.isFinite(value)) next[item.key] = [...(current[item.key] ?? []).slice(-23), value];
       }
       return next;
     });

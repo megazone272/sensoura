@@ -35,6 +35,8 @@ export interface SensorData {
   VOC: number;
   Light: number;
   Barometricpressure: number;
+  BarometricPressure?: number;
+  Altitude?: number;
   lastUpdate: number;
 }
 
@@ -50,7 +52,7 @@ export interface SystemStatus {
 export interface RelayState {
   mode: 'AUTO' | 'MANUAL';
   state: 'ON' | 'OFF';
-  reason: 'boot' | 'soil_dry' | 'scheduled' | 'manual' | 'ai_predicted' | 'emergency' | 'threshold_met' | 'network-failsafe';
+  reason: 'boot' | 'soil_dry' | 'scheduled' | 'manual' | 'manual_override' | 'ai_predicted' | 'emergency' | 'threshold_met' | 'network-failsafe';
   lastAction: number;
 }
 
@@ -89,8 +91,8 @@ export interface AISuggestion {
   reason: string;
   recommendedAction: {
     target: string;
-    action: string;
-    mode: 'MANUAL' | 'AUTO' | null;
+    action?: string;
+    mode?: 'MANUAL' | 'AUTO' | null;
   };
   status: 'pending' | 'approved' | 'rejected' | 'executed' | 'expired';
   requiresApproval: boolean;
@@ -98,6 +100,14 @@ export interface AISuggestion {
   createdAt: number;
   expiresAt: number;
   metadata?: Record<string, any>;
+}
+
+export interface AIPrediction {
+  id?: string;
+  type: string;
+  predictedValue: string | number;
+  confidence: number;
+  predictionTime: number;
 }
 
 export interface PredictionData {

@@ -8,6 +8,7 @@ import { Dashboard } from './pages/Dashboard';
 import { Sensors } from './pages/Sensors';
 import { Commands } from './pages/Commands';
 import { AISuggestions } from './pages/AISuggestions';
+import { CropRotation } from './pages/CropRotation';
 import { Settings } from './pages/Settings';
 import { NotFound } from './pages/NotFound';
 import { ClimateSection } from './components/ClimateSection';
@@ -63,6 +64,7 @@ function App() {
               <Route path="commands" element={<Commands />} />
               <Route path="history" element={<History />} />
               <Route path="ai-suggestions" element={<AISuggestions />} />
+              <Route path="crop-rotation" element={<CropRotation />} />
               <Route path="health" element={<SystemHealth />} />
               <Route path="settings" element={<Settings />} />
             </Route>

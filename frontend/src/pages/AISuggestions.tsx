@@ -18,7 +18,7 @@ type BackendMode = 'sdk' | 'mock' | 'unknown';
 
 function isSupportedAction(suggestion: AISuggestion): boolean {
   const action = suggestion.recommendedAction;
-  return supportedTargets.has(action.target) && supportedActions.has(action.action) && (action.mode === 'MANUAL' || action.mode === 'AUTO');
+  return supportedTargets.has(action.target) && !!action.action && supportedActions.has(action.action) && (action.mode === 'MANUAL' || action.mode === 'AUTO');
 }
 
 export function AISuggestions() {
@@ -124,7 +124,7 @@ function SuggestionCard({ suggestion, now, canReview }: { suggestion: AISuggesti
 
   return <article className="suggestion-card" style={{ '--suggestion-color': color } as CSSProperties}>
     <div className="suggestion-card-header"><span className="suggestion-icon"><Icon size={19} /></span><div className="suggestion-copy"><div className="suggestion-title-row"><h3>{suggestion.suggestion}</h3><span className="badge badge-info">{suggestion.type}</span></div><p>{suggestion.reason}</p></div><div className="suggestion-status-column">{confidence && <span className="suggestion-confidence">{confidence} {t('confidence')}</span>}<span className={`badge ${isExpired ? 'badge-neutral' : (decision ?? suggestion.status) === 'rejected' ? 'badge-danger' : (decision ?? suggestion.status) === 'executed' ? 'badge-success' : 'badge-warning'}`}>{t(isExpired ? 'expired' : decision ?? suggestion.status)}</span></div></div>
-    <div className="suggestion-recommendation"><span>{language === 'ar' ? 'الإجراء المقترح' : 'Recommended action'}</span><code>{suggestion.recommendedAction.target} → {suggestion.recommendedAction.action}{suggestion.recommendedAction.mode ? ` · ${suggestion.recommendedAction.mode}` : ''}</code></div>
+    <div className="suggestion-recommendation"><span>{language === 'ar' ? 'الإجراء المقترح' : 'Recommended action'}</span><code>{suggestion.recommendedAction.target}{suggestion.recommendedAction.action ? ` → ${suggestion.recommendedAction.action}` : ''}{suggestion.recommendedAction.mode ? ` · ${suggestion.recommendedAction.mode}` : ''}</code></div>
     {!supported && <p className="status-banner is-info mt-3" role="note">{t('adviceOnly')}</p>}
     {isPending && <div className="suggestion-actions"><button className="btn btn-primary btn-sm" onClick={() => void review('approved')} disabled={!connected || !canReview || processing || !supported || !suggestion.id}>{processing ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}{t('approved')}</button><button className="btn btn-secondary btn-sm" onClick={() => void review('rejected')} disabled={!connected || !canReview || processing || !suggestion.id}>{processing ? <Loader2 size={15} className="animate-spin" /> : <XCircle size={15} />}{t('rejected')}</button></div>}
     {isPending && !connected && <p className="microcopy mt-2">{t('disconnected')}</p>}{message && <p className="microcopy mt-3" role="status">{message}</p>}
