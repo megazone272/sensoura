@@ -19,6 +19,11 @@ if (!existsSync(path.join(frontendDist, 'index.html'))) {
 
 for (const targetDir of [distPublic, rootPublic]) {
   mkdirSync(targetDir, { recursive: true });
+  // Clean stale assets so obsolete hashed bundles are never retained
+  const assetsDir = path.join(targetDir, 'assets');
+  if (existsSync(assetsDir)) {
+    rmSync(assetsDir, { recursive: true, force: true });
+  }
   cpSync(frontendDist, targetDir, { recursive: true });
   if (!existsSync(path.join(targetDir, 'index.html'))) {
     throw new Error(`Frontend index.html missing from ${targetDir}`);

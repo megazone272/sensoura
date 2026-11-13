@@ -81,6 +81,12 @@ async function buildApp() {
           res.header('Cross-Origin-Resource-Policy', 'cross-origin');
           res.header('Access-Control-Allow-Origin', '*');
         }
+        // HTML entry points must never be cached by browsers or CDNs
+        if (/\.html$/i.test(pathName) || pathName === '/' || pathName === '') {
+          res.header('Cache-Control', 'no-cache, no-store, must-revalidate, proxy-revalidate, max-age=0');
+          res.header('Pragma', 'no-cache');
+          res.header('Expires', '0');
+        }
       },
     });
 
@@ -117,11 +123,27 @@ async function buildApp() {
       request.method === 'GET' &&
       (request.headers.accept ?? '').includes('text/html');
 
+    // Block any obsolete bundle requests so stale cached pages cannot execute legacy auth paths
+    if (
+      pathname.includes('index-CzmIXS3T') ||
+      pathname.includes('index-DREYT7pQ') ||
+      pathname.includes('index-cckOyWB8') ||
+      pathname.includes('index-C-o9dKXw')
+    ) {
+      return reply
+        .code(410)
+        .header('Cache-Control', 'no-store')
+        .send({ error: 'Obsolete bundle', message: 'This bundle is obsolete. Please refresh the page.' });
+    }
+
     if (
       existsSync(frontendIndexPath) &&
       acceptsHtml &&
       !isReservedPath
     ) {
+      reply.header('Cache-Control', 'no-cache, no-store, must-revalidate, proxy-revalidate, max-age=0');
+      reply.header('Pragma', 'no-cache');
+      reply.header('Expires', '0');
       return reply.type('text/html').sendFile('index.html');
     }
 
