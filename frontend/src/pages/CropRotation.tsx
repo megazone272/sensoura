@@ -46,6 +46,11 @@ interface Strategy {
 
 interface CropRotationResponse {
   strategies: Strategy[];
+  context?: {
+    soilType?: string;
+    primaryGoal?: string;
+    currentCropId?: string;
+  };
   location?: {
     name?: string;
     city?: string;
@@ -55,7 +60,7 @@ interface CropRotationResponse {
     latitude?: number;
     longitude?: number;
   };
-  availableCrops: CropProfile[];
+  availableCrops?: CropProfile[];
   evaluatedAt: number;
   source: string;
 }
@@ -126,6 +131,7 @@ export function CropRotation() {
   const [soilType, setSoilType] = useState('clay_loam');
   const [primaryGoal, setPrimaryGoal] = useState('max_yield');
   const [evaluating, setEvaluating] = useState(false);
+  const [lastEvaluated, setLastEvaluated] = useState<{ soil: string; goal: string } | null>(null);
 
   const fetchData = async (customContext?: { soilType: string; primaryGoal: string }) => {
     setLoading(true); setError(null);
@@ -139,6 +145,9 @@ export function CropRotation() {
         ? await endpoints.evaluateCropRotation(customContext)
         : await endpoints.getCropRotation();
       setData(response.data as CropRotationResponse);
+      if (customContext) {
+        setLastEvaluated({ soil: customContext.soilType, goal: customContext.primaryGoal });
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t('cropRotationError'));
     } finally {
@@ -250,15 +259,40 @@ export function CropRotation() {
         </div>
         <div style={{ display: 'flex', alignItems: 'flex-end' }}>
           <button onClick={handleEvaluate} disabled={evaluating} style={{
-            width: '100%', padding: '8px 16px', borderRadius: 8,
+            width: '100%', padding: '9px 18px', borderRadius: 8,
             background: 'linear-gradient(135deg, #22d9ba, #5bc9e7)',
             color: '#0d0d1a', fontWeight: 700, fontSize: 13, border: 'none', cursor: 'pointer',
-            opacity: evaluating ? 0.6 : 1,
+            opacity: evaluating ? 0.7 : 1,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            boxShadow: '0 2px 10px rgba(34,217,186,0.25)',
           }}>
-            {evaluating ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : t('evaluate')}
+            {evaluating ? (
+              <>
+                <Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} />
+                <span>{isAr ? 'جارٍ التقييم…' : 'Evaluating…'}</span>
+              </>
+            ) : (
+              <span>{t('evaluate')}</span>
+            )}
           </button>
         </div>
       </div>
+
+      {/* Active Evaluation Banner */}
+      {lastEvaluated && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px',
+          borderRadius: 8, background: 'rgba(34,217,186,0.1)', border: '1px solid rgba(34,217,186,0.3)',
+          color: '#22d9ba', fontSize: 13, fontWeight: 600, marginBottom: 20,
+        }}>
+          <Sprout size={16} />
+          <span>
+            {isAr
+              ? `تم تحديث التقييم المخصص بنجاح بناءً على نوع التربة (${soilType === 'clay' ? 'طينية' : soilType === 'sandy' ? 'رملية' : soilType === 'loam' ? 'صفراء' : 'طينية صفراء'}) والهدف (${primaryGoal === 'water_saving' ? 'توفير المياه' : primaryGoal === 'soil_health' ? 'صحة التربة' : primaryGoal === 'climate_adaptation' ? 'التكيف المناخي' : 'أقصى محصول'}).`
+              : `Strategies successfully tailored for ${soilType.replace('_', ' ')} soil and ${primaryGoal.replace('_', ' ')} goal.`}
+          </span>
+        </div>
+      )}
 
       {/* Strategy Cards */}
       {data && data.strategies.map((strategy) => {

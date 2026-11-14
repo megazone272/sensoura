@@ -114,6 +114,13 @@ export async function registerCropRotationRoutes(fastify: FastifyInstance): Prom
           currentCropId: context.currentCropId,
         },
         location: formatLocationPayload(location),
+        availableCrops: Object.values(CROPS_DATABASE).map(c => ({
+          id: c.id,
+          nameEn: c.nameEn,
+          nameAr: c.nameAr,
+          category: c.category,
+          growingSeason: c.growingSeason,
+        })),
         evaluatedAt: Date.now(),
         source: 'SENSOURA AI + NASA Earth Observations',
       };

@@ -167,6 +167,93 @@ export function evaluateCropRotationStrategies(context: FarmContext): CropRotati
   const currentMoisture = context.currentSoilMoisture ?? 24.0;
   const currentTemp = context.currentAirTemp ?? 28.4;
   const isSoilDry = currentMoisture < 30;
+  const soil = context.soilType || 'clay_loam';
+  const goal = context.primaryGoal || 'max_yield';
+
+  // --- Dynamic Soil Modifiers ---
+  // Sandy: High drainage, high nutrient leaching risk, severe penalty for high-water monocultures.
+  // Clay: High water retention, severe compaction risk, benefits from deep taproot aerators.
+  // Loam: Balanced high fertility.
+  // Clay Loam: Standard fertile Nile Delta soil.
+  let baselineScore = 62;
+  let waterScore = 86;
+  let soilRegenScore = 89;
+
+  let baselineWaterIndex = 88;
+  let waterSavingsPct = 36;
+  let soilHealthScore = 92;
+  let nitrogenBalanceRegen = 75;
+
+  let soilInsightAr = '';
+  let soilInsightEn = '';
+
+  switch (soil) {
+    case 'sandy':
+      baselineScore = 44;
+      waterScore = 94;
+      soilRegenScore = 87;
+      baselineWaterIndex = 95;
+      waterSavingsPct = 42;
+      soilInsightAr = 'تربة رملية سريعة الصرف: رصد SMAP يؤكد انخفاض سعة الاحتفاظ المائي، مما يجعل المحاصيل الموفرة (الشعير والذرة الرفيعة) الخيار الأمثل لتفادي هدر الري.';
+      soilInsightEn = 'Sandy high-drainage soil: NASA SMAP verifies low retention capacity, making drought-hardy cultivars essential to prevent irrigation percolation loss.';
+      break;
+    case 'clay':
+      baselineScore = 58;
+      waterScore = 86;
+      soilRegenScore = 95;
+      baselineWaterIndex = 84;
+      waterSavingsPct = 34;
+      soilInsightAr = 'تربة طينية ثقيلة: رصد SMAP يؤكد ارتفاع احتباس المياه؛ زراعة دوار الشمس والبقوليات تفتت انضغاط التربة وتعزز التهوية والصرف الداخلي.';
+      soilInsightEn = 'Heavy clay soil: NASA SMAP indicates dense moisture retention; deep taproot sunflowers and legumes break subsoil compaction and restore internal aeration.';
+      break;
+    case 'loam':
+      baselineScore = 72;
+      waterScore = 88;
+      soilRegenScore = 93;
+      baselineWaterIndex = 82;
+      waterSavingsPct = 36;
+      soilInsightAr = 'تربة صفراء طميية متوازنة: خصوبة طبيعية مرتفعة تتيح مرونة عالية في تحقيق أقصى إنتاجية مع الحفاظ على دورة التناوب المستدام.';
+      soilInsightEn = 'Balanced loam soil: High inherent fertility enables flexible rotation scheduling to maximize crop biomass while sustaining soil organic matter.';
+      break;
+    case 'clay_loam':
+    default:
+      baselineScore = 64;
+      waterScore = 88;
+      soilRegenScore = 92;
+      baselineWaterIndex = 86;
+      waterSavingsPct = 38;
+      soilInsightAr = 'تربة الدلتا الطينية الصفراء: النمط القياسي للري في وادي النيل؛ التبديل لدورة موفرة للمياه يقلل الضغط على حصص مياه الترع.';
+      soilInsightEn = 'Nile Delta clay-loam: Standard regional baseline; shifting to water-saving rotations relieves extraction pressure on local canal quotas.';
+      break;
+  }
+
+  // --- Dynamic Primary Goal Modifiers ---
+  switch (goal) {
+    case 'max_yield':
+      baselineScore += 8;
+      waterScore += 2;
+      soilRegenScore += 3;
+      break;
+    case 'water_saving':
+      baselineScore -= 14;
+      waterScore = Math.max(waterScore, 95);
+      soilRegenScore -= 2;
+      break;
+    case 'soil_health':
+      baselineScore -= 16;
+      waterScore -= 2;
+      soilRegenScore = Math.max(soilRegenScore, 96);
+      break;
+    case 'climate_adaptation':
+      baselineScore -= 10;
+      waterScore = Math.max(waterScore, 93);
+      soilRegenScore = Math.max(soilRegenScore, 91);
+      break;
+  }
+
+  if (isSoilDry) {
+    waterScore = Math.min(99, waterScore + 2);
+  }
 
   // 1. Baseline Strategy (Traditional: Wheat -> Maize)
   const baselineStrategy: CropRotationStrategy = {
@@ -181,13 +268,13 @@ export function evaluateCropRotationStrategies(context: FarmContext): CropRotati
       { season: 'Summer', crop: CROPS_DATABASE.maize },
     ],
     metrics: {
-      waterConsumptionIndex: 88,
+      waterConsumptionIndex: baselineWaterIndex,
       waterSavingsPercentage: 0,
-      soilHealthScore: 54,
+      soilHealthScore: soil === 'sandy' ? 42 : 54,
       nitrogenBalanceKgHa: -155, // Both crops heavily extract nitrogen
-      climateRiskResilience: 'Moderate',
-      economicViability: 'High',
-      overallSuitabilityScore: 68,
+      climateRiskResilience: soil === 'sandy' ? 'Low' : 'Moderate',
+      economicViability: goal === 'max_yield' ? 'High' : 'Moderate',
+      overallSuitabilityScore: Math.max(35, Math.min(80, baselineScore)),
     },
     explanationEn:
       'High historical production value, but places continuous extraction pressure on soil nitrogen (-155 kg N/ha) and demands substantial irrigation water (1,100 mm/year), creating vulnerability to regional water stress identified by NASA POWER.',
@@ -201,12 +288,12 @@ export function evaluateCropRotationStrategies(context: FarmContext): CropRotati
     },
     fieldTelemetryInsights: [
       `Local ground moisture currently at ${currentMoisture}% demonstrates acute stress during hot hours (${currentTemp}°C).`,
+      soilInsightEn,
       'Requires substantial synthetic nitrogen fertilizers to sustain wheat/maize yields.',
     ],
   };
 
   // 2. Climate-Resilient & Water-Conserving Strategy (Faba Bean -> Sorghum)
-  const waterSavingsPct = 36;
   const waterResilientStrategy: CropRotationStrategy = {
     id: 'strategy_water_resilient',
     nameEn: 'Climate-Adapted Water Saver (Faba Bean → Sorghum)',
@@ -219,18 +306,18 @@ export function evaluateCropRotationStrategies(context: FarmContext): CropRotati
       { season: 'Summer', crop: CROPS_DATABASE.sorghum },
     ],
     metrics: {
-      waterConsumptionIndex: 52,
+      waterConsumptionIndex: Math.round(baselineWaterIndex * (1 - waterSavingsPct / 100)),
       waterSavingsPercentage: waterSavingsPct,
       soilHealthScore: 78,
       nitrogenBalanceKgHa: +10, // Legume fixes N for subsequent drought crop
       climateRiskResilience: 'High',
       economicViability: 'Balanced',
-      overallSuitabilityScore: context.primaryGoal === 'water_saving' || isSoilDry ? 94 : 85,
+      overallSuitabilityScore: Math.max(70, Math.min(98, waterScore)),
     },
     explanationEn:
-      'Saves approximately 36% of annual irrigation water by pairing a drought-tolerant legume (Faba Bean) with heat-hardy Sorghum. Faba beans fix biological nitrogen (+55 kg/ha) to support the subsequent summer crop with minimal fertilizer input.',
+      `Saves approximately ${waterSavingsPct}% of annual irrigation water by pairing a drought-tolerant legume (Faba Bean) with heat-hardy Sorghum. Faba beans fix biological nitrogen (+55 kg/ha) to support the subsequent summer crop with minimal fertilizer input.`,
     explanationAr:
-      'توفر ما يقارب 36% من مياه الري السنوية بالدمج بين البقوليات الموفرة للمياه (الفول البلدي) ومحصول الذرة الرفيعة المقاوم لدرجات الحرارة المرتفعة. يثبت الفول نيتروجين حيوي (+55 كجم/هكتار) يغذي المحصول الصيفي التالي تلقائياً.',
+      `توفر ما يقارب ${waterSavingsPct}% من مياه الري السنوية بالدمج بين البقوليات الموفرة للمياه (الفول البلدي) ومحصول الذرة الرفيعة المقاوم لدرجات الحرارة المرتفعة. يثبت الفول نيتروجين حيوي (+55 كجم/هكتار) يغذي المحصول الصيفي التالي تلقائياً.`,
     nasaDataContributions: {
       nasaPower: 'Validates that Sorghum heat threshold comfortably exceeds Cairo maximum summer temperatures.',
       smap: 'Matches satellite soil moisture envelope with Faba Bean deep root moisture absorption.',
@@ -239,12 +326,12 @@ export function evaluateCropRotationStrategies(context: FarmContext): CropRotati
     },
     fieldTelemetryInsights: [
       `Ideal adaptation for current telemetry: ground moisture (${currentMoisture}%) is well within the acceptable survival zone for drought-tolerant crops.`,
-      'Reduces pump operation run-time by over 30%, lowering energy and maintenance costs.',
+      soilInsightEn,
+      `Reduces pump operation run-time by over ${waterSavingsPct}%, lowering energy and maintenance costs.`,
     ],
   };
 
   // 3. Regenerative & Soil-Health Strategy (Egyptian Clover -> Sunflower / Wheat)
-  const soilHealthScore = 92;
   const soilRegenStrategy: CropRotationStrategy = {
     id: 'strategy_soil_regeneration',
     nameEn: 'Soil Health & Fertility Restorative (Berseem Clover → Sunflower)',
@@ -257,13 +344,13 @@ export function evaluateCropRotationStrategies(context: FarmContext): CropRotati
       { season: 'Summer', crop: CROPS_DATABASE.sunflower },
     ],
     metrics: {
-      waterConsumptionIndex: 65,
-      waterSavingsPercentage: 22,
+      waterConsumptionIndex: Math.round(baselineWaterIndex * 0.75),
+      waterSavingsPercentage: 24,
       soilHealthScore: soilHealthScore,
-      nitrogenBalanceKgHa: +45, // Net surplus biological nitrogen
+      nitrogenBalanceKgHa: +nitrogenBalanceRegen, // Net surplus biological nitrogen
       climateRiskResilience: 'High',
       economicViability: 'High',
-      overallSuitabilityScore: context.primaryGoal === 'soil_health' ? 96 : 89,
+      overallSuitabilityScore: Math.max(70, Math.min(99, soilRegenScore)),
     },
     explanationEn:
       'Focuses on rebuilding depleted organic matter and biological soil fertility. Egyptian clover contributes exceptional nitrogen fixation (+75 kg N/ha) and high biomass, while deep-taproot sunflowers break compacted soil layers and recycle nutrients from deep soil strata.',
@@ -277,10 +364,15 @@ export function evaluateCropRotationStrategies(context: FarmContext): CropRotati
     },
     fieldTelemetryInsights: [
       'Addresses soil degradation indicators indicated by elevated soil temperature (22.5°C) and low organic moisture retention.',
+      soilInsightEn,
       'Generates high-value livestock fodder and premium oilseed yield with balanced water usage.',
     ],
   };
 
-  return [baselineStrategy, waterResilientStrategy, soilRegenStrategy];
+  const strategies = [baselineStrategy, waterResilientStrategy, soilRegenStrategy];
+  // Sort dynamically so the highest suitability score appears at the top
+  strategies.sort((a, b) => b.metrics.overallSuitabilityScore - a.metrics.overallSuitabilityScore);
+
+  return strategies;
 }
 
