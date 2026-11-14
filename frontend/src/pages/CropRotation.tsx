@@ -259,7 +259,7 @@ export function CropRotation() {
         </div>
         <div style={{ display: 'flex', alignItems: 'flex-end' }}>
           <button onClick={handleEvaluate} disabled={evaluating} style={{
-            width: '100%', padding: '9px 18px', borderRadius: 8,
+            width: '100%', minHeight: 40, padding: '9px 18px', borderRadius: 8,
             background: 'linear-gradient(135deg, #22d9ba, #5bc9e7)',
             color: '#0d0d1a', fontWeight: 700, fontSize: 13, border: 'none', cursor: 'pointer',
             opacity: evaluating ? 0.7 : 1,
@@ -338,7 +338,7 @@ export function CropRotation() {
                 </p>
               </div>
               <div style={{
-                textAlign: 'center', padding: '4px 12px', borderRadius: 8, background: colors.tag,
+                textAlign: 'center', padding: '4px 12px', borderRadius: 8, background: colors.tag, flexShrink: 0,
               }}>
                 <div style={{ fontSize: 22, fontWeight: 800, color: colors.accent, lineHeight: 1 }}>
                   {strategy.metrics.overallSuitabilityScore}
@@ -349,7 +349,7 @@ export function CropRotation() {
 
             {/* Crop Sequence */}
             <div style={{
-              display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14,
+              display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 14,
               padding: '10px 12px', borderRadius: 8, background: 'rgba(255,255,255,0.03)',
             }}>
               {strategy.sequence.map((step, i) => (
@@ -398,7 +398,7 @@ export function CropRotation() {
                     <Satellite size={14} style={{ color: '#5bc9e7' }} />
                     {t('nasaContributions')}
                   </h4>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 8 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 230px), 1fr))', gap: 8 }}>
                     {Object.entries(strategy.nasaDataContributions).map(([key, value]) => (
                       <div key={key} style={{
                         padding: '8px 12px', borderRadius: 8, fontSize: 12,

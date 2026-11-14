@@ -1,0 +1,1738 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SENSOURA — NASA Space Apps Presentation</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg-space: #070b14;
+      --bg-card: rgba(15, 23, 42, 0.75);
+      --bg-card-hover: rgba(30, 41, 59, 0.85);
+      --border-glow: rgba(34, 217, 186, 0.25);
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --primary: #22d9ba;
+      --primary-glow: rgba(34, 217, 186, 0.35);
+      --accent-gold: #e8c66a;
+      --accent-purple: #9c9bff;
+      --accent-red: #f43f5e;
+      --font-ar: 'Cairo', system-ui, sans-serif;
+      --font-en: 'Inter', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: var(--bg-space);
+      background-image: 
+        radial-gradient(circle at 15% 20%, rgba(34, 217, 186, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 85% 80%, rgba(156, 155, 255, 0.07) 0%, transparent 45%),
+        radial-gradient(circle at 50% 50%, rgba(232, 198, 106, 0.04) 0%, transparent 60%);
+      color: var(--text-main);
+      font-family: var(--font-ar);
+      min-height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      user-select: none;
+    }
+
+    body[dir="ltr"] {
+      font-family: var(--font-en);
+    }
+
+    /* Top Progress Bar */
+    .progress-bar-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.05);
+      z-index: 1000;
+    }
+
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--primary), var(--accent-gold), var(--accent-purple));
+      box-shadow: 0 0 12px var(--primary-glow);
+      transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* Header Bar */
+    header {
+      position: fixed;
+      top: 4px;
+      left: 0;
+      right: 0;
+      height: 60px;
+      padding: 0 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      backdrop-filter: blur(16px);
+      background: rgba(7, 11, 20, 0.65);
+      border-bottom: 1px solid var(--border-subtle);
+      z-index: 900;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      text-decoration: none;
+      color: inherit;
+    }
+
+    .brand-logo {
+      width: 34px;
+      height: 34px;
+      border-radius: 9px;
+      background: linear-gradient(135deg, var(--primary), #0ea5e9);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 16px var(--primary-glow);
+    }
+
+    .brand-logo svg {
+      width: 20px;
+      height: 20px;
+      fill: #070b14;
+    }
+
+    .brand-title {
+      font-size: 1.15rem;
+      font-weight: 900;
+      letter-spacing: 1px;
+      background: linear-gradient(135deg, #ffffff, var(--primary));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand-badge {
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(34, 217, 186, 0.12);
+      border: 1px solid var(--border-glow);
+      color: var(--primary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .btn-icon {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-main);
+      padding: 0.45rem 0.85rem;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: all 0.2s ease;
+      font-family: inherit;
+    }
+
+    .btn-icon:hover {
+      background: rgba(34, 217, 186, 0.15);
+      border-color: var(--border-glow);
+      color: var(--primary);
+      transform: translateY(-1px);
+    }
+
+    /* Main Slides Container */
+    main {
+      flex: 1;
+      margin-top: 64px;
+      margin-bottom: 68px;
+      position: relative;
+      width: 100%;
+      height: calc(100vh - 132px);
+      overflow: hidden;
+    }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      padding: 2.5rem 3.5rem;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(20px) scale(0.985);
+      transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0.4s;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .slide.active {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0) scale(1);
+      z-index: 10;
+    }
+
+    /* Slide Typography & Layout */
+    .slide-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--primary);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+    }
+
+    .slide-title {
+      font-size: 2.5rem;
+      font-weight: 900;
+      line-height: 1.2;
+      margin-bottom: 0.75rem;
+      background: linear-gradient(135deg, #ffffff 40%, #cbd5e1 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .slide-subtitle {
+      font-size: 1.15rem;
+      color: var(--text-muted);
+      line-height: 1.6;
+      max-width: 850px;
+      margin-bottom: 2rem;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.75rem;
+      align-items: stretch;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.5rem;
+      align-items: stretch;
+    }
+
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1.25rem;
+      align-items: stretch;
+    }
+
+    /* Cards */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      padding: 1.75rem;
+      backdrop-filter: blur(12px);
+      transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--border-glow), transparent);
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .card:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--border-glow);
+      transform: translateY(-3px);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+    }
+
+    .card:hover::before {
+      opacity: 1;
+    }
+
+    .card-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 1.25rem;
+      font-size: 1.5rem;
+    }
+
+    .icon-primary {
+      background: rgba(34, 217, 186, 0.12);
+      border: 1px solid rgba(34, 217, 186, 0.3);
+      color: var(--primary);
+    }
+
+    .icon-gold {
+      background: rgba(232, 198, 106, 0.12);
+      border: 1px solid rgba(232, 198, 106, 0.3);
+      color: var(--accent-gold);
+    }
+
+    .icon-purple {
+      background: rgba(156, 155, 255, 0.12);
+      border: 1px solid rgba(156, 155, 255, 0.3);
+      color: var(--accent-purple);
+    }
+
+    .icon-red {
+      background: rgba(244, 63, 94, 0.12);
+      border: 1px solid rgba(244, 63, 94, 0.3);
+      color: var(--accent-red);
+    }
+
+    .card h3 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-bottom: 0.6rem;
+      color: #fff;
+    }
+
+    .card p {
+      font-size: 0.95rem;
+      color: var(--text-muted);
+      line-height: 1.6;
+      flex: 1;
+    }
+
+    .card-metric {
+      font-size: 2.2rem;
+      font-weight: 900;
+      font-family: var(--font-mono);
+      margin-top: 1rem;
+      display: flex;
+      align-items: baseline;
+      gap: 0.4rem;
+    }
+
+    .card-metric span {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    /* Badges & Tags */
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      width: fit-content;
+      margin-bottom: 0.75rem;
+    }
+
+    .tag-primary {
+      background: rgba(34, 217, 186, 0.15);
+      color: var(--primary);
+      border: 1px solid rgba(34, 217, 186, 0.3);
+    }
+
+    .tag-gold {
+      background: rgba(232, 198, 106, 0.15);
+      color: var(--accent-gold);
+      border: 1px solid rgba(232, 198, 106, 0.3);
+    }
+
+    .tag-purple {
+      background: rgba(156, 155, 255, 0.15);
+      color: var(--accent-purple);
+      border: 1px solid rgba(156, 155, 255, 0.3);
+    }
+
+    /* Comparison Bar */
+    .stat-bar-container {
+      margin-top: 1rem;
+      width: 100%;
+    }
+
+    .stat-bar-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.85rem;
+      margin-bottom: 0.35rem;
+      color: var(--text-muted);
+    }
+
+    .stat-bar-header b {
+      color: var(--text-main);
+    }
+
+    .stat-bar {
+      height: 8px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.08);
+      overflow: hidden;
+    }
+
+    .stat-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.8s ease;
+    }
+
+    /* Hero Slide Special */
+    .hero-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1.25rem;
+      border-radius: 999px;
+      background: rgba(34, 217, 186, 0.1);
+      border: 1px solid var(--border-glow);
+      color: var(--primary);
+      font-size: 0.9rem;
+      font-weight: 700;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 0 20px rgba(34, 217, 186, 0.2);
+    }
+
+    .hero-title {
+      font-size: 4.2rem;
+      font-weight: 900;
+      line-height: 1.1;
+      margin-bottom: 1rem;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, #ffffff 30%, var(--primary) 90%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero-desc {
+      font-size: 1.35rem;
+      color: #94a3b8;
+      line-height: 1.7;
+      margin-bottom: 2.2rem;
+    }
+
+    .hero-meta {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 1.5rem;
+      font-size: 0.95rem;
+      color: #cbd5e1;
+    }
+
+    .hero-meta-item {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-subtle);
+    }
+
+    /* Architecture Flow */
+    .flow-step {
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      padding: 1.25rem;
+      position: relative;
+    }
+
+    .flow-step-num {
+      position: absolute;
+      top: -10px;
+      right: -10px;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: var(--primary);
+      color: #070b14;
+      font-weight: 800;
+      font-size: 0.8rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    body[dir="ltr"] .flow-step-num {
+      right: auto;
+      left: -10px;
+    }
+
+    /* Code block preview */
+    .code-box {
+      background: #050811;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      color: #38bdf8;
+      overflow-x: auto;
+      direction: ltr;
+      text-align: left;
+    }
+
+    /* Bottom Control Bar */
+    footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 64px;
+      padding: 0 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      backdrop-filter: blur(16px);
+      background: rgba(7, 11, 20, 0.75);
+      border-top: 1px solid var(--border-subtle);
+      z-index: 900;
+    }
+
+    .slide-counter {
+      font-family: var(--font-mono);
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--primary);
+      background: rgba(34, 217, 186, 0.08);
+      padding: 4px 12px;
+      border-radius: 6px;
+      border: 1px solid rgba(34, 217, 186, 0.2);
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .btn-nav {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border-subtle);
+      color: #fff;
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-nav:hover:not(:disabled) {
+      background: var(--primary);
+      color: #070b14;
+      border-color: var(--primary);
+      box-shadow: 0 0 15px var(--primary-glow);
+    }
+
+    .btn-nav:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    .kbd-hint {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .kbd {
+      padding: 2px 6px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 4px;
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: #cbd5e1;
+    }
+
+    /* Table of contents modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(16px);
+      z-index: 2000;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    .modal-overlay.open {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .toc-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 1.25rem;
+      max-width: 1200px;
+      width: 100%;
+      max-height: 80vh;
+      overflow-y: auto;
+      padding: 1rem;
+    }
+
+    .toc-card {
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 1.25rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-align: right;
+    }
+
+    body[dir="ltr"] .toc-card {
+      text-align: left;
+    }
+
+    .toc-card:hover, .toc-card.active {
+      border-color: var(--primary);
+      background: rgba(34, 217, 186, 0.1);
+      transform: translateY(-2px);
+    }
+
+    .toc-card h4 {
+      font-size: 0.95rem;
+      color: #fff;
+      margin-bottom: 0.3rem;
+    }
+
+    .toc-card span {
+      font-size: 0.75rem;
+      color: var(--primary);
+      font-family: var(--font-mono);
+    }
+
+    /* Print Styles */
+    @media print {
+      body {
+        overflow: visible;
+        background: #fff !important;
+        color: #000 !important;
+      }
+      header, footer, .progress-bar-container, .modal-overlay {
+        display: none !important;
+      }
+      main {
+        margin: 0;
+        height: auto;
+      }
+      .slide {
+        position: relative !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+        transform: none !important;
+        page-break-after: always;
+        height: 100vh;
+        padding: 3rem;
+      }
+      .card {
+        background: #f8fafc !important;
+        border: 1px solid #cbd5e1 !important;
+        color: #0f172a !important;
+      }
+      .slide-title {
+        color: #0f172a !important;
+        -webkit-text-fill-color: initial !important;
+      }
+    }
+
+    /* Responsive Design Across All Devices */
+    @media (max-width: 900px) {
+      .grid-2, .grid-3, .grid-4 {
+        grid-template-columns: 1fr;
+        gap: 0.85rem;
+      }
+      .slide {
+        padding: 1.25rem 0.85rem;
+        min-height: calc(100vh - 130px);
+      }
+      .slide-title {
+        font-size: clamp(1.4rem, 4.5vw, 1.9rem);
+      }
+      .hero-title {
+        font-size: clamp(2rem, 6.5vw, 3rem);
+      }
+      .kbd-hint {
+        display: none !important;
+      }
+    }
+
+    @media (max-width: 768px) {
+      header {
+        top: 0;
+        height: 54px;
+        padding: 0 0.85rem;
+      }
+      .brand {
+        gap: 0.5rem;
+      }
+      .brand-logo {
+        width: 28px;
+        height: 28px;
+      }
+      .brand-title {
+        font-size: 1rem;
+      }
+      .brand-badge {
+        display: none !important;
+      }
+      .nav-actions {
+        gap: 0.35rem;
+      }
+      .btn-icon {
+        padding: 0.35rem 0.55rem;
+        font-size: 0.76rem;
+      }
+      /* Hide text in secondary action buttons on mobile, keep language pill prominent */
+      #btnToc span, #btnFullscreen span, .nav-actions a span {
+        display: none;
+      }
+      #btnFullscreen {
+        display: none;
+      }
+      footer {
+        height: 56px;
+        padding: 0 0.85rem;
+      }
+      .slide-counter {
+        font-size: 0.82rem;
+        padding: 3px 8px;
+      }
+      .btn-nav {
+        width: 36px;
+        height: 36px;
+        padding: 0;
+        display: grid;
+        place-items: center;
+      }
+      .modal-box {
+        width: 95vw;
+        max-height: 85vh;
+        padding: 1.25rem;
+      }
+      .toc-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 420px) {
+      .hero-badge {
+        font-size: 0.72rem;
+        padding: 4px 10px;
+      }
+      .hero-subtitle {
+        font-size: 0.88rem;
+      }
+      .stat-number {
+        font-size: 1.6rem;
+      }
+      .card {
+        padding: 1rem;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Progress Bar -->
+  <div class="progress-bar-container">
+    <div class="progress-bar" id="progressBar"></div>
+  </div>
+
+  <!-- Header -->
+  <header>
+    <a href="https://sensoura.ox0x.com/" target="_blank" class="brand">
+      <div class="brand-logo">
+        <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+      </div>
+      <div>
+        <div class="brand-title">SENSOURA</div>
+      </div>
+      <span class="brand-badge" data-i18n="missionBadge">LUNAR ANALOG &bull; NASA 2026</span>
+    </a>
+
+    <div class="nav-actions">
+      <button class="btn-icon" id="btnToc" title="Table of Contents (T)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        <span data-i18n="tocBtn">الفهرس</span>
+      </button>
+
+      <button class="btn-icon" id="btnLang" title="Toggle Language (L)">
+        <span id="langLabel">English</span>
+      </button>
+
+      <button class="btn-icon" id="btnFullscreen" title="Toggle Fullscreen (F)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+        <span data-i18n="fsBtn">شاشة كاملة</span>
+      </button>
+
+      <a href="https://sensoura.ox0x.com/" target="_blank" class="btn-icon" style="background: rgba(34, 217, 186, 0.15); border-color: var(--border-glow); color: var(--primary);">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        <span data-i18n="liveBtn">النظام المباشر</span>
+      </a>
+    </div>
+  </header>
+
+  <!-- Presentation Slides -->
+  <main id="slidesContainer">
+
+    <!-- Slide 1: Cover / Hero -->
+    <section class="slide active" data-slide="1">
+      <div class="hero-content">
+        <div class="hero-badge">
+          🚀 NASA Space Apps Cairo 2026 &bull; <span data-i18n="heroTrack">تحدي تحول الحقول ببيانات ناسا</span>
+        </div>
+        <h1 class="hero-title">SENSOURA</h1>
+        <p class="hero-desc" data-i18n="heroDesc">
+          نظام إنترنت الأشياء والذكاء الاصطناعي للزراعة الذكية ومحاكاة البيئات القمرية — دمج قراءات الحساسات الأرضية مع بيانات أقمار ناسا لحماية الأمن الغذائي والمائي.
+        </p>
+        <div class="hero-meta">
+          <div class="hero-meta-item">
+            <span>👥</span>
+            <strong data-i18n="heroTeam">الفريق:</strong> TEAM-MISSION-49
+          </div>
+          <div class="hero-meta-item">
+            <span>🛰️</span>
+            <strong data-i18n="heroNasaData">بيانات ناسا:</strong> NASA POWER &bull; SMAP &bull; GPM &bull; Landsat
+          </div>
+          <div class="hero-meta-item">
+            <span>🌐</span>
+            <strong data-i18n="heroHost">المنصة المباشرة:</strong> sensoura.ox0x.com
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Slide 2: The Challenge / Problem -->
+    <section class="slide" data-slide="2">
+      <div class="slide-eyebrow">
+        <span>⚠️</span> <span data-i18n="s2Eyebrow">المشكلة والتحدي</span>
+      </div>
+      <h2 class="slide-title" data-i18n="s2Title">أزمة استنزاف الموارد بين الأرض والفضاء</h2>
+      <p class="slide-subtitle" data-i18n="s2Subtitle">
+        الزراعة التقليدية تواجه ندرة مائية حادة وتدهوراً في خصوبة التربة، وهي ذات التحديات الحرجة التي تواجه نظم الحياة المغلقة في المهمات الفضائية القمرية.
+      </p>
+
+      <div class="grid-3">
+        <div class="card">
+          <div class="card-icon icon-red">💧</div>
+          <h3 data-i18n="s2C1Title">عجز مائي متصاعد</h3>
+          <p data-i18n="s2C1Text">
+            تعتمد مصر على نهر النيل بنسبة 97% مع تزايد موجات الجفاف الشديدة وارتفاع درجات الحرارة، مما يتطلب تقليص مياه الري بنسبة لا تقل عن 30% دون الإضرار بالإنتاجية.
+          </p>
+          <div class="card-metric" style="color: var(--accent-red);">
+            -38% <span>عجز مائي متوقع</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-icon icon-gold">🌱</div>
+          <h3 data-i18n="s2C2Title">استنزاف التربة الأحادي</h3>
+          <p data-i18n="s2C2Text">
+            الدورة الزراعية التقليدية الثابتة (قمح / ذرة) تستنزف النيتروجين بمعدل يصل إلى -155 كجم/هكتار سنوياً، مما يرفع تكلفة الأسمدة الكيميائية وتلوث المياه الجوفية.
+          </p>
+          <div class="card-metric" style="color: var(--accent-gold);">
+            -155 <span>كجم نيتروجين/هكتار</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-icon icon-purple">🌑</div>
+          <h3 data-i18n="s2C3Title">تحدي محاكاة القمر (Lunar Analog)</h3>
+          <p data-i18n="s2C3Text">
+            في البيوت الزراعية المغلقة على سطح القمر والمريخ (برنامج Artemis)، لا مجال للهدر. كل قطرة ماء وجرام نيتروجين يجب تدويرها بدقة 100% في حلقة مغلقة.
+          </p>
+          <div class="card-metric" style="color: var(--accent-purple);">
+            100% <span>إعادة تدوير مغلقة</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Slide 3: The Solution -->
+    <section class="slide" data-slide="3">
+      <div class="slide-eyebrow">
+        <span>💡</span> <span data-i18n="s3Eyebrow">الحل المبتكر</span>
+      </div>
+      <h2 class="slide-title" data-i18n="s3Title">منظومة SENSOURA: الذكاء التكاملي</h2>
+      <p class="slide-subtitle" data-i18n="s3Subtitle">
+        دمج ثلاثي فريد بين أجهزة إنترنت الأشياء الأرضية الحية، بيانات الاستشعار عن بعد من ناسا، ونماذج تعلم الآلة لاتخاذ القرارات الزراعية المؤتمتة.
+      </p>
+
+      <div class="grid-3">
+        <div class="card">
+          <div class="tag tag-primary" data-i18n="s3T1">الطبقة الأرضية</div>
+          <div class="card-icon icon-primary">📡</div>
+          <h3 data-i18n="s3C1Title">مصفوفة حساسات ESP32</h3>
+          <p data-i18n="s3C1Text">
+            7 حساسات أرضية تقيس رطوبة وحرارة التربة، حرارة ورطوبة الجو، الغازات العضوية المتطايرة VOC، شدة الإضاءة، والضغط الجوي، مع تحكم تلقائي في مضخات الري.
+          </p>
+        </div>
+
+        <div class="card">
+          <div class="tag tag-gold" data-i18n="s3T2">الطبقة الفضائية</div>
+          <div class="card-icon icon-gold">🛰️</div>
+          <h3 data-i18n="s3C2Title">بيانات أرصاد ناسا</h3>
+          <p data-i18n="s3C2Text">
+            ربط مباشر مع NASA POWER للإشعاع الشمسي والحرارة، SMAP لرطوبة التربة الجذرية، GPM لتنبؤات الأمطار، و Landsat/MODIS لمؤشرات صحة الغطاء النباتي (NDVI).
+          </p>
+        </div>
+
+        <div class="card">
+          <div class="tag tag-purple" data-i18n="s3T3">طبقة اتخاذ القرار</div>
+          <div class="card-icon icon-purple">🧠</div>
+          <h3 data-i18n="s3C3Title">محرك الدورة الزراعية والذكاء الاصطناعي</h3>
+          <p data-i18n="s3C3Text">
+            خوارزميات تقييم متعددة المعايير تقارن 3 استراتيجيات للدورة الزراعية، وتتنبأ بالاحتياج المائي بدقة، مع نظام موافقة بشرية مسبقة للأمان التشغيلي.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Slide 4: NASA Earth Observations -->
+    <section class="slide" data-slide="4">
+      <div class="slide-eyebrow">
+        <span>🛰️</span> <span data-i18n="s4Eyebrow">بيانات ناسا للأرض</span>
+      </div>
+      <h2 class="slide-title" data-i18n="s4Title">كيف نوظف بيانات أقمار ناسا في المزرعة؟</h2>
+      <p class="slide-subtitle" data-i18n="s4Subtitle">
+        تحويل مليارات نقاط البيانات الفضائية إلى قرارات زراعية يومية ذكية تحمي المحصول وتوفر الموارد.
+      </p>
+
+      <div class="grid-4">
+        <div class="card">
+          <div class="tag tag-primary">NASA POWER</div>
+          <h3 data-i18n="s4C1Title">الطاقة الشمسية والمناخ</h3>
+          <p data-i18n="s4C1Text">
+            حساب درجات الحرارة التراكمية للنمو (GDD) والإشعاع الشمسي الفعلي لتحديد مواعيد الزراعة ونضج المحصول بدقة.
+          </p>
+          <div class="stat-bar-container">
+            <div class="stat-bar-header"><span>دقة التنبؤ الحراري</span><b>98.4%</b></div>
+            <div class="stat-bar"><div class="stat-bar-fill" style="width: 98%; background: var(--primary);"></div></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="tag tag-gold">NASA SMAP</div>
+          <h3 data-i18n="s4C2Title">رطوبة التربة من الفضاء</h3>
+          <p data-i18n="s4C2Text">
+            مراقبة رطوبة منطقة الجذور (0-5 سم وعمق 1 متر) لمعايرة حساسات التربة الأرضية وكشف جفاف التربة قبل ذبول النبات.
+          </p>
+          <div class="stat-bar-container">
+            <div class="stat-bar-header"><span>عمق الرصد الجذري</span><b>100 cm</b></div>
+            <div class="stat-bar"><div class="stat-bar-fill" style="width: 85%; background: var(--accent-gold);"></div></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="tag tag-purple">NASA GPM (IMERG)</div>
+          <h3 data-i18n="s4C3Title">قياس الأمطار العالمي</h3>
+          <p data-i18n="s4C3Text">
+            دمج قياسات هطول الأمطار التراكمية لتأجيل دورات الري التلقائي عند توقع أمطار، مانعاً تشبع التربة المفرط.
+          </p>
+          <div class="stat-bar-container">
+            <div class="stat-bar-header"><span>توفير مياه الري</span><b>+38%</b></div>
+            <div class="stat-bar"><div class="stat-bar-fill" style="width: 78%; background: var(--accent-purple);"></div></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="tag tag-primary">Landsat / MODIS</div>
+          <h3 data-i18n="s4C4Title">مؤشر حيوية النبات NDVI</h3>
+          <p data-i18n="s4C4Text">
+            متابعة انعكاسات الكلوروفيل وكتلة النبات الخضراء للتحقق من استجابة المحصول وتأكيد التعافي بعد التدخلات الذكية.
+          </p>
+          <div class="stat-bar-container">
+            <div class="stat-bar-header"><span>صحة النبات القصوى</span><b>0.82 NDVI</b></div>
+            <div class="stat-bar"><div class="stat-bar-fill" style="width: 92%; background: #0ea5e9;"></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Slide 5: Hardware & IoT Telemetry -->
+    <section class="slide" data-slide="5">
+      <div class="slide-eyebrow">
+        <span>⚙️</span> <span data-i18n="s5Eyebrow">الهندسة والعتاد المادي</span>
+      </div>
+      <h2 class="slide-title" data-i18n="s5Title">محطة الاستشعار والتحكم الأرضية</h2>
+      <p class="slide-subtitle" data-i18n="s5Subtitle">
+        تصميم هجين قوي ومستقل يعتمد على متحكم ESP32 ببث مشفر وموثوق عبر WebSocket و HTTPS بروتوكولات.
+      </p>
+
+      <div class="grid-2">
+        <div class="card">
+          <h3 data-i18n="s5HwSensorsTitle">الحساسات الـ 7 المدمجة:</h3>
+          <ul style="list-style: none; display: flex; flex-direction: column; gap: 0.75rem; margin-top: 0.75rem;">
+            <li style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-subtle); padding-bottom: 0.4rem;">
+              <span>🌱 رطوبة التربة (Soil Moisture)</span>
+              <b style="color: var(--primary);">Capacitive v1.2</b>
+            </li>
+            <li style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-subtle); padding-bottom: 0.4rem;">
+              <span>🌡️ حرارة التربة (Soil Temperature)</span>
+              <b style="color: var(--primary);">DS18B20 Waterproof</b>
+            </li>
+            <li style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-subtle); padding-bottom: 0.4rem;">
+              <span>🌤️ حرارة ورطوبة الجو (Air Temp & Humidity)</span>
+              <b style="color: var(--primary);">DHT22 / SHT31</b>
+            </li>
+            <li style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-subtle); padding-bottom: 0.4rem;">
+              <span>☣️ جودة الهواء والغازات (VOC / Gas)</span>
+              <b style="color: var(--primary);">MQ-135 Gas Sensor</b>
+            </li>
+            <li style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-subtle); padding-bottom: 0.4rem;">
+              <span>☀️ شدة الإضاءة النهارية (Light Intensity)</span>
+              <b style="color: var(--primary);">LDR Sensor (Lux)</b>
+            </li>
+            <li style="display: flex; justify-content: space-between;">
+              <span>🧭 الضغط والارتفاع (Pressure & Altitude)</span>
+              <b style="color: var(--primary);">BMP280 Precision</b>
+            </li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <h3 data-i18n="s5HwCtrlTitle">المشغلات والحماية التشغيلية:</h3>
+          <p data-i18n="s5HwCtrlDesc">
+            تحكم آمن ثنائي النواة: تشغيل مضخة ري الغمر/التنقيط عبر Relay معزول كهرضوئياً، جرس إنذار Piezo للطوارئ، ومصفوفة LED لحالة المزرعة.
+          </p>
+          <div class="code-box" style="margin-top: 1rem;">
+            POST /api/device/telemetry HTTP/1.1<br>
+            Authorization: Bearer [DEVICE_AUTH_TOKEN]<br>
+            { "sensorData": { "SoilMoisture": 42.0, "AirTemp": 28.4 },<br>
+            &nbsp;&nbsp;"system": { "status": "online", "deviceId": "esp32-01" } }
+          </div>
+          <div style="margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <span class="tag tag-primary">SSL/TLS 1.3</span>
+            <span class="tag tag-gold">Rate Limiting: 100 req/min</span>
+            <span class="tag tag-purple">Idempotent Commands</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Slide 6: Crop Rotation AI Engine (Challenge Core) -->
+    <section class="slide" data-slide="6">
+      <div class="slide-eyebrow">
+        <span>🌾</span> <span data-i18n="s6Eyebrow">قلب تحدي ناسا (Field Shift)</span>
+      </div>
+      <h2 class="slide-title" data-i18n="s6Title">محرك الذكاء الاصطناعي للدورة الزراعية</h2>
+      <p class="slide-subtitle" data-i18n="s6Subtitle">
+        مقارنة علمية دقيقة لـ 3 استراتيجيات تكيف مع تغير المناخ تعتمد على بيانات ناسا ونوع التربة.
+      </p>
+
+      <div class="grid-3">
+        <!-- Strategy 1 -->
+        <div class="card" style="border-top: 3px solid var(--accent-purple);">
+          <div class="tag tag-purple" data-i18n="s6Strat1Tag">النمط السائد حالياً</div>
+          <h3 data-i18n="s6Strat1Title">1. الدورة التقليدية الثابتة</h3>
+          <p data-i18n="s6Strat1Desc">
+            (قمح شتوي ➔ ذرة صيفية): النمط المتبع في أراضي الدلتا الطينية. استهلاك مائي مرتفع واستنزاف حاد للنيتروجين.
+          </p>
+          <div class="stat-bar-container">
+            <div class="stat-bar-header"><span>توفير المياه</span><b>0% (مرتفع الاستهلاك)</b></div>
+            <div class="stat-bar"><div class="stat-bar-fill" style="width: 15%; background: var(--accent-red);"></div></div>
+          </div>
+          <div class="stat-bar-container">
+            <div class="stat-bar-header"><span>توازن النيتروجين</span><b style="color: var(--accent-red);">-65 kg/ha</b></div>
+            <div class="stat-bar"><div class="stat-bar-fill" style="width: 25%; background: var(--accent-red);"></div></div>
+          </div>
+          <div class="card-metric" style="color: var(--accent-purple);">
+            54/100 <span>معدل الملائمة</span>
+          </div>
+        </div>
+
+        <!-- Strategy 2 -->
+        <div class="card" style="border-top: 3px solid var(--primary);">
+          <div class="tag tag-primary" data-i18n="s6Strat2Tag">مرونة مناخية وتوفير مائي</div>
+          <h3 data-i18n="s6Strat2Title">2. الدورة الموفرة للمياه</h3>
+          <p data-i18n="s6Strat2Desc">
+            (شعير بلدي ➔ ذرة رفيعة وبرسيم): استبدال المحاصيل الشرهة ببدائل مقاومة للجفاف ومتحملة للملوحة والإجهاد الحراري.
+          </p>
+          <div class="stat-bar-container">
+            <div class="stat-bar-header"><span>توفير المياه</span><b style="color: var(--primary);">+38% توفير مائي</b></div>
+            <div class="stat-bar"><div class="stat-bar-fill" style="width: 78%; background: var(--primary);"></div></div>
+          </div>
+          <div class="stat-bar-container">
+            <div class="stat-bar-header"><span>توازن النيتروجين</span><b style="color: var(--primary);">+15 kg/ha</b></div>
+            <div class="stat-bar"><div class="stat-bar-fill" style="width: 60%; background: var(--primary);"></div></div>
+          </div>
+          <div class="card-metric" style="color: var(--primary);">
+            84/100 <span>معدل الملائمة</span>
+          </div>
+        </div>
+
+        <!-- Strategy 3 -->
+        <div class="card" style="border-top: 3px solid var(--accent-gold);">
+          <div class="tag tag-gold" data-i18n="s6Strat3Tag">⭐ الاستراتيجية الموصى بها</div>
+          <h3 data-i18n="s6Strat3Title">3. دورة تجديد وتثبيت النيتروجين</h3>
+          <p data-i18n="s6Strat3Desc">
+            (فول بلدي ➔ سمسم ومحاصيل تغطية): دمج البقوليات ذات التثبيت الحيوي للنيتروجين الجوي بالتعاون مع بكتيريا العقد الجذرية.
+          </p>
+          <div class="stat-bar-container">
+            <div class="stat-bar-header"><span>توفير المياه</span><b style="color: var(--accent-gold);">+29% توفير</b></div>
+            <div class="stat-bar"><div class="stat-bar-fill" style="width: 68%; background: var(--accent-gold);"></div></div>
+          </div>
+          <div class="stat-bar-container">
+            <div class="stat-bar-header"><span>تثبيت النيتروجين الحيوي</span><b style="color: var(--accent-gold);">+75 kg N/ha</b></div>
+            <div class="stat-bar"><div class="stat-bar-fill" style="width: 95%; background: var(--accent-gold);"></div></div>
+          </div>
+          <div class="card-metric" style="color: var(--accent-gold);">
+            91/100 <span>مؤشر صحة التربة 92%</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Slide 7: System Architecture -->
+    <section class="slide" data-slide="7">
+      <div class="slide-eyebrow">
+        <span>🏗️</span> <span data-i18n="s7Eyebrow">المعمارية البرمجية</span>
+      </div>
+      <h2 class="slide-title" data-i18n="s7Title">بنية برمجية متطورة وفائقة الأمان</h2>
+      <p class="slide-subtitle" data-i18n="s7Subtitle">
+        تطبيق مبادئ Enterprise-Grade و Cloud-Native لضمان الاستقرار وسرعة الاستجابة بأقل من 100 ميلي ثانية.
+      </p>
+
+      <div class="grid-4">
+        <div class="card">
+          <div class="card-icon icon-primary">💻</div>
+          <h3>Frontend SPA</h3>
+          <p>
+            React 18 &bull; TypeScript &bull; Vite &bull; Zustand &bull; Recharts &bull; دعم كامل للغتين العربية والإنجليزية وثيم فلكي مظلم ومضيء.
+          </p>
+        </div>
+
+        <div class="card">
+          <div class="card-icon icon-gold">⚡</div>
+          <h3>Backend Engine</h3>
+          <p>
+            Node.js 22 &bull; Fastify High-Performance &bull; Socket.IO WebSockets &bull; Zod Schema Validation &bull; Pino Structured Logging.
+          </p>
+        </div>
+
+        <div class="card">
+          <div class="card-icon icon-purple">🔥</div>
+          <h3>Cloud & Data</h3>
+          <p>
+            Firebase Realtime Database &bull; Firebase Auth &bull; Admin SDK &bull; تكامل SMTP لإرسال رسائل التحقق والتنبيهات المصممة باحترافية.
+          </p>
+        </div>
+
+        <div class="card">
+          <div class="card-icon icon-primary">🛡️</div>
+          <h3>Infrastructure</h3>
+          <p>
+            Rootless Podman Containers &bull; Nginx TLS Reverse Proxy &bull; 100% Test Coverage (317 Tests Passed) &bull; Uptime 99.98%.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Slide 8: Live Dashboard & Demo -->
+    <section class="slide" data-slide="8">
+      <div class="slide-eyebrow">
+        <span>🖥️</span> <span data-i18n="s8Eyebrow">المنظومة قيد التشغيل الحي</span>
+      </div>
+      <h2 class="slide-title" data-i18n="s8Title">لوحة التحكم والمحاكاة المباشرة</h2>
+      <p class="slide-subtitle" data-i18n="s8Subtitle">
+        المنصة منشورة ومتاحة على خادم الإنتاج الحي: <strong>sensoura.ox0x.com</strong>
+      </p>
+
+      <div class="grid-2">
+        <div class="card" style="justify-content: center;">
+          <h3 data-i18n="s8FeatTitle">المزايا التشغيلية المباشرة:</h3>
+          <ul style="list-style: none; display: flex; flex-direction: column; gap: 0.9rem; margin-top: 1rem;">
+            <li style="display: flex; align-items: center; gap: 0.6rem;">
+              <span style="color: var(--primary);">✓</span>
+              <span data-i18n="s8F1">رصد فوري حي (Live Telemetry) بدون إعادة تحميل الصفحة عبر WebSockets.</span>
+            </li>
+            <li style="display: flex; align-items: center; gap: 0.6rem;">
+              <span style="color: var(--primary);">✓</span>
+              <span data-i18n="s8F2">محرك نبضات التحديث التلقائي للحفاظ على تدفق البيانات الحية.</span>
+            </li>
+            <li style="display: flex; align-items: center; gap: 0.6rem;">
+              <span style="color: var(--primary);">✓</span>
+              <span data-i18n="s8F3">اقتراحات الذكاء الاصطناعي مع تحكم بشري مشروط بالموافقة.</span>
+            </li>
+            <li style="display: flex; align-items: center; gap: 0.6rem;">
+              <span style="color: var(--primary);">✓</span>
+              <span data-i18n="s8F4">شاشة مخصصة لتقييم الدورة الزراعية مع خرائط إحداثيات الموقع (Cairo, Egypt).</span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="card" style="text-align: center; justify-content: center; align-items: center; background: rgba(34, 217, 186, 0.05); border-color: var(--border-glow);">
+          <div style="font-size: 3.5rem; margin-bottom: 0.5rem;">🌍</div>
+          <h3 style="font-size: 1.5rem; color: #fff;">https://sensoura.ox0x.com</h3>
+          <p style="margin-bottom: 1.25rem;" data-i18n="s8LiveDesc">جرب النظام الآن من أي جهاز أو هاتف ذكي</p>
+          <a href="https://sensoura.ox0x.com/" target="_blank" class="btn-icon" style="background: var(--primary); color: #070b14; font-weight: 800; padding: 0.75rem 1.5rem; font-size: 1rem; border: none; box-shadow: 0 0 25px var(--primary-glow);">
+            <span data-i18n="s8OpenBtn">فتح لوحة التحكم المباشرة ↗</span>
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Slide 9: Earth & Space Impact -->
+    <section class="slide" data-slide="9">
+      <div class="slide-eyebrow">
+        <span>🌱</span> <span data-i18n="s9Eyebrow">الأثر المستدام</span>
+      </div>
+      <h2 class="slide-title" data-i18n="s9Title">أثر مزدوج: من وادي النيل إلى سطح القمر</h2>
+      <p class="slide-subtitle" data-i18n="s9Subtitle">
+        حلول هندسية قابلة للتطبيق الفوري في مصر، وتمهد لمستقبل استيطان الفضاء المستدام.
+      </p>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="tag tag-primary" data-i18n="s9EarthTag">الأثر على كوكب الأرض</div>
+          <h3 data-i18n="s9EarthTitle">أراضي الدلتا والمشروعات القومية</h3>
+          <p data-i18n="s9EarthText">
+            توفير ملايين الأمتار المكعبة من مياه الري في مشروعات الدلتا الجديدة، توشكى، وسيناء. خفض الاعتماد على الأسمدة النيتروجينية المستوردة وتفادي تملح التربة، مما يدعم أهداف التنمية المستدامة (SDGs 2, 6, 12, 13).
+          </p>
+          <div class="card-metric" style="color: var(--primary);">
+            38% <span>توفير في مياه الري الحقلية</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="tag tag-purple" data-i18n="s9SpaceTag">الأثر الفضائي (Lunar Analog)</div>
+          <h3 data-i18n="s9SpaceTitle">بيوت الزراعة المغلقة في الفضاء</h3>
+          <p data-i18n="s9SpaceText">
+            تطوير خوارزميات التغذية الذاتية لأنظمة الحياة الحيوية المغلقة (BLSS) لبرنامج Artemis، حيث يتم رصد رطوبة وسوائل التربة بدقة متناهية تحت ظروف الجاذبية المنخفضة والقيود الصارمة للموارد.
+          </p>
+          <div class="card-metric" style="color: var(--accent-purple);">
+            BLSS <span>دعم الحياة التجديدي الفضائي</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Slide 10: Roadmap -->
+    <section class="slide" data-slide="10">
+      <div class="slide-eyebrow">
+        <span>🗺️</span> <span data-i18n="s10Eyebrow">خارطة الطريق المستقبلية</span>
+      </div>
+      <h2 class="slide-title" data-i18n="s10Title">ماذا بعد الهاكاثون؟</h2>
+      <p class="slide-subtitle" data-i18n="s10Subtitle">
+        خطة توسعية واضحة لتحويل النموذج الأولي المكتمل إلى منتج زراعي وفضائي قابل للتوسع التجاري.
+      </p>
+
+      <div class="grid-3">
+        <div class="card">
+          <div class="tag tag-primary">المرحلة 1: منجزة بنجاح ✓</div>
+          <h3 data-i18n="s10P1Title">النظام الكامل المباشر</h3>
+          <p data-i18n="s10P1Text">
+            حساسات ESP32 + ربط أرصاد ناسا (POWER, SMAP, GPM) + محرك الذكاء الاصطناعي للدورة الزراعية + موقع الإنتاج الحي.
+          </p>
+        </div>
+
+        <div class="card">
+          <div class="tag tag-gold">المرحلة 2: الربع الأول 2027</div>
+          <h3 data-i18n="s10P2Title">شبكات LoRaWAN البعيدة</h3>
+          <p data-i18n="s10P2Text">
+            ربط مئات الحساسات عبر مساحات زراعية شاسعة تمتد لأكثر من 15 كم بدون الحاجة لشبكة واي فاي محلية.
+          </p>
+        </div>
+
+        <div class="card">
+          <div class="tag tag-purple">المرحلة 3: النصف الثاني 2027</div>
+          <h3 data-i18n="s10P3Title">طائرات الدرونز ومعايرة NDVI</h3>
+          <p data-i18n="s10P3Text">
+            تصوير طيفي متعدد بواسطة الدرونز لمعايرة صور الأقمار الصناعية ومعالجة الإجهاد المائي على مستوى كل شجرة ونبتة.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Slide 11: Team & Conclusion -->
+    <section class="slide" data-slide="11">
+      <div class="hero-content">
+        <div class="hero-badge">
+          🤝 NASA Space Apps Cairo 2026 &bull; TEAM-MISSION-49
+        </div>
+        <h2 class="slide-title" style="font-size: 3.2rem;" data-i18n="s11Title">معاً نحو زراعة ذكية للأرض وما بعدها</h2>
+        <p class="hero-desc" data-i18n="s11Desc">
+          نشكر لجنة تحكيم NASA Space Apps Cairo 2026. نحن مستعدون للإجابة عن استفساراتكم وبدء العرض التجريبي الحي.
+        </p>
+
+        <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center; margin-top: 1rem;">
+          <a href="https://sensoura.ox0x.com/" target="_blank" class="btn-icon" style="background: var(--primary); color: #070b14; font-weight: 800; padding: 0.85rem 1.8rem; font-size: 1.05rem; border: none; box-shadow: 0 0 30px var(--primary-glow);">
+            <span data-i18n="s11LiveBtn">استعراض المنصة الحية ↗</span>
+          </a>
+          <a href="https://sensoura.ox0x.com/crop-rotation" target="_blank" class="btn-icon" style="background: rgba(156, 155, 255, 0.15); border-color: var(--accent-purple); color: var(--accent-purple); font-weight: 700; padding: 0.85rem 1.8rem; font-size: 1.05rem;">
+            <span data-i18n="s11CropBtn">محرك الدورة الزراعية ↗</span>
+          </a>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Bottom Bar -->
+  <footer>
+    <div style="display: flex; align-items: center; gap: 1rem;">
+      <div class="slide-counter" id="slideCounter">01 / 11</div>
+      <div class="kbd-hint">
+        <span class="kbd">←</span> <span class="kbd">→</span> <span data-i18n="navHint">للتنقل</span>
+        <span class="kbd" style="margin-inline-start: 6px;">F</span> <span data-i18n="fsHint">ملء الشاشة</span>
+        <span class="kbd" style="margin-inline-start: 6px;">L</span> <span data-i18n="langHint">اللغة</span>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="btn-nav" id="btnPrev" title="Previous Slide (Left Arrow)">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+      <button class="btn-nav" id="btnNext" title="Next Slide (Right Arrow / Space)">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+    </div>
+  </footer>
+
+  <!-- Table of Contents Modal -->
+  <div class="modal-overlay" id="tocModal">
+    <div class="toc-grid" id="tocGrid"></div>
+  </div>
+
+  <script>
+    // Bilingual dictionary for entire presentation
+    const translations = {
+      ar: {
+        missionBadge: "محاكاة القمر &bull; ناسا 2026",
+        tocBtn: "الفهرس",
+        fsBtn: "شاشة كاملة",
+        liveBtn: "النظام المباشر",
+        navHint: "للتنقل",
+        fsHint: "ملء الشاشة",
+        langHint: "اللغة",
+        heroTrack: "تحدي تحول الحقول ببيانات ناسا",
+        heroDesc: "نظام إنترنت الأشياء والذكاء الاصطناعي للزراعة الذكية ومحاكاة البيئات القمرية — دمج قراءات الحساسات الأرضية مع بيانات أقمار ناسا لحماية الأمن الغذائي والمائي.",
+        heroTeam: "الفريق:",
+        heroNasaData: "بيانات ناسا:",
+        heroHost: "المنصة المباشرة:",
+        s2Eyebrow: "المشكلة والتحدي",
+        s2Title: "أزمة استنزاف الموارد بين الأرض والفضاء",
+        s2Subtitle: "الزراعة التقليدية تواجه ندرة مائية حادة وتدهوراً في خصوبة التربة، وهي ذات التحديات الحرجة التي تواجه نظم الحياة المغلقة في المهمات الفضائية القمرية.",
+        s2C1Title: "عجز مائي متصاعد",
+        s2C1Text: "تعتمد مصر على نهر النيل بنسبة 97% مع تزايد موجات الجفاف الشديدة وارتفاع درجات الحرارة، مما يتطلب تقليص مياه الري بنسبة لا تقل عن 30% دون الإضرار بالإنتاجية.",
+        s2C2Title: "استنزاف التربة الأحادي",
+        s2C2Text: "الدورة الزراعية التقليدية الثابتة (قمح / ذرة) تستنزف النيتروجين بمعدل يصل إلى -155 كجم/هكتار سنوياً، مما يرفع تكلفة الأسمدة الكيميائية وتلوث المياه الجوفية.",
+        s2C3Title: "تحدي محاكاة القمر (Lunar Analog)",
+        s2C3Text: "في البيوت الزراعية المغلقة على سطح القمر والمريخ (برنامج Artemis)، لا مجال للهدر. كل قطرة ماء وجرام نيتروجين يجب تدويرها بدقة 100% في حلقة مغلقة.",
+        s3Eyebrow: "الحل المبتكر",
+        s3Title: "منظومة SENSOURA: الذكاء التكاملي",
+        s3Subtitle: "دمج ثلاثي فريد بين أجهزة إنترنت الأشياء الأرضية الحية، بيانات الاستشعار عن بعد من ناسا، ونماذج تعلم الآلة لاتخاذ القرارات الزراعية المؤتمتة.",
+        s3T1: "الطبقة الأرضية",
+        s3C1Title: "مصفوفة حساسات ESP32",
+        s3C1Text: "7 حساسات أرضية تقيس رطوبة وحرارة التربة، حرارة ورطوبة الجو، الغازات العضوية المتطايرة VOC، شدة الإضاءة، والضغط الجوي، مع تحكم تلقائي في مضخات الري.",
+        s3T2: "الطبقة الفضائية",
+        s3C2Title: "بيانات أرصاد ناسا",
+        s3C2Text: "ربط مباشر مع NASA POWER للإشعاع الشمسي والحرارة، SMAP لرطوبة التربة الجذرية، GPM لتنبؤات الأمطار، و Landsat/MODIS لمؤشرات صحة الغطاء النباتي (NDVI).",
+        s3T3: "طبقة اتخاذ القرار",
+        s3C3Title: "محرك الدورة الزراعية والذكاء الاصطناعي",
+        s3C3Text: "خوارزميات تقييم متعددة المعايير تقارن 3 استراتيجيات للدورة الزراعية، وتتنبأ بالاحتياج المائي بدقة، مع نظام موافقة بشرية مسبقة للأمان التشغيلي.",
+        s4Eyebrow: "بيانات ناسا للأرض",
+        s4Title: "كيف نوظف بيانات أقمار ناسا في المزرعة؟",
+        s4Subtitle: "تحويل مليارات نقاط البيانات الفضائية إلى قرارات زراعية يومية ذكية تحمي المحصول وتوفر الموارد.",
+        s4C1Title: "الطاقة الشمسية والمناخ",
+        s4C1Text: "حساب درجات الحرارة التراكمية للنمو (GDD) والإشعاع الشمسي الفعلي لتحديد مواعيد الزراعة ونضج المحصول بدقة.",
+        s4C2Title: "رطوبة التربة من الفضاء",
+        s4C2Text: "مراقبة رطوبة منطقة الجذور (0-5 سم وعمق 1 متر) لمعايرة حساسات التربة الأرضية وكشف جفاف التربة قبل ذبول النبات.",
+        s4C3Title: "قياس الأمطار العالمي",
+        s4C3Text: "دمج قياسات هطول الأمطار التراكمية لتأجيل دورات الري التلقائي عند توقع أمطار، مانعاً تشبع التربة المفرط.",
+        s4C4Title: "مؤشر حيوية النبات NDVI",
+        s4C4Text: "متابعة انعكاسات الكلوروفيل وكتلة النبات الخضراء للتحقق من استجابة المحصول وتأكيد التعافي بعد التدخلات الذكية.",
+        s5Eyebrow: "الهندسة والعتاد المادي",
+        s5Title: "محطة الاستشعار والتحكم الأرضية",
+        s5Subtitle: "تصميم هجين قوي ومستقل يعتمد على متحكم ESP32 ببث مشفر وموثوق عبر WebSocket و HTTPS بروتوكولات.",
+        s5HwSensorsTitle: "الحساسات الـ 7 المدمجة:",
+        s5HwCtrlTitle: "المشغلات والحماية التشغيلية:",
+        s5HwCtrlDesc: "تحكم آمن ثنائي النواة: تشغيل مضخة ري الغمر/التنقيط عبر Relay معزول كهرضوئياً، جرس إنذار Piezo للطوارئ، ومصفوفة LED لحالة المزرعة.",
+        s6Eyebrow: "قلب تحدي ناسا (Field Shift)",
+        s6Title: "محرك الذكاء الاصطناعي للدورة الزراعية",
+        s6Subtitle: "مقارنة علمية دقيقة لـ 3 استراتيجيات تكيف مع تغير المناخ تعتمد على بيانات ناسا ونوع التربة.",
+        s6Strat1Tag: "النمط السائد حالياً",
+        s6Strat1Title: "1. الدورة التقليدية الثابتة",
+        s6Strat1Desc: "(قمح شتوي ➔ ذرة صيفية): النمط المتبع في أراضي الدلتا الطينية. استهلاك مائي مرتفع واستنزاف حاد للنيتروجين.",
+        s6Strat2Tag: "مرونة مناخية وتوفير مائي",
+        s6Strat2Title: "2. الدورة الموفرة للمياه",
+        s6Strat2Desc: "(شعير بلدي ➔ ذرة رفيعة وبرسيم): استبدال المحاصيل الشرهة ببدائل مقاومة للجفاف ومتحملة للملوحة والإجهاد الحراري.",
+        s6Strat3Tag: "⭐ الاستراتيجية الموصى بها",
+        s6Strat3Title: "3. دورة تجديد وتثبيت النيتروجين",
+        s6Strat3Desc: "(فول بلدي ➔ سمسم ومحاصيل تغطية): دمج البقوليات ذات التثبيت الحيوي للنيتروجين الجوي بالتعاون مع بكتيريا العقد الجذرية.",
+        s7Eyebrow: "المعمارية البرمجية",
+        s7Title: "بنية برمجية متطورة وفائقة الأمان",
+        s7Subtitle: "تطبيق مبادئ Enterprise-Grade و Cloud-Native لضمان الاستقرار وسرعة الاستجابة بأقل من 100 ميلي ثانية.",
+        s8Eyebrow: "المنظومة قيد التشغيل الحي",
+        s8Title: "لوحة التحكم والمحاكاة المباشرة",
+        s8Subtitle: "المنصة منشورة ومتاحة على خادم الإنتاج الحي: sensoura.ox0x.com",
+        s8FeatTitle: "المزايا التشغيلية المباشرة:",
+        s8F1: "رصد فوري حي (Live Telemetry) بدون إعادة تحميل الصفحة عبر WebSockets.",
+        s8F2: "محرك نبضات التحديث التلقائي للحفاظ على تدفق البيانات الحية.",
+        s8F3: "اقتراحات الذكاء الاصطناعي مع تحكم بشري مشروط بالموافقة.",
+        s8F4: "شاشة مخصصة لتقييم الدورة الزراعية مع خرائط إحداثيات الموقع (Cairo, Egypt).",
+        s8LiveDesc: "جرب النظام الآن من أي جهاز أو هاتف ذكي",
+        s8OpenBtn: "فتح لوحة التحكم المباشرة ↗",
+        s9Eyebrow: "الأثر المستدام",
+        s9Title: "أثر مزدوج: من وادي النيل إلى سطح القمر",
+        s9Subtitle: "حلول هندسية قابلة للتطبيق الفوري في مصر، وتمهد لمستقبل استيطان الفضاء المستدام.",
+        s9EarthTag: "الأثر على كوكب الأرض",
+        s9EarthTitle: "أراضي الدلتا والمشروعات القومية",
+        s9EarthText: "توفير ملايين الأمتار المكعبة من مياه الري في مشروعات الدلتا الجديدة، توشكى، وسيناء. خفض الاعتماد على الأسمدة النيتروجينية المستوردة وتفادي تملح التربة، مما يدعم أهداف التنمية المستدامة (SDGs 2, 6, 12, 13).",
+        s9SpaceTag: "الأثر الفضائي (Lunar Analog)",
+        s9SpaceTitle: "بيوت الزراعة المغلقة في الفضاء",
+        s9SpaceText: "تطوير خوارزميات التغذية الذاتية لأنظمة الحياة الحيوية المغلقة (BLSS) لبرنامج Artemis، حيث يتم رصد رطوبة وسوائل التربة بدقة متناهية تحت ظروف الجاذبية المنخفضة والقيود الصارمة للموارد.",
+        s10Eyebrow: "خارطة الطريق المستقبلية",
+        s10Title: "ماذا بعد الهاكاثون؟",
+        s10Subtitle: "خطة توسعية واضحة لتحويل النموذج الأولي المكتمل إلى منتج زراعي وفضائي قابل للتوسع التجاري.",
+        s10P1Title: "النظام الكامل المباشر",
+        s10P1Text: "حساسات ESP32 + ربط أرصاد ناسا (POWER, SMAP, GPM) + محرك الذكاء الاصطناعي للدورة الزراعية + موقع الإنتاج الحي.",
+        s10P2Title: "شبكات LoRaWAN البعيدة",
+        s10P2Text: "ربط مئات الحساسات عبر مساحات زراعية شاسعة تمتد لأكثر من 15 كم بدون الحاجة لشبكة واي فاي محلية.",
+        s10P3Title: "طائرات الدرونز ومعايرة NDVI",
+        s10P3Text: "تصوير طيفي متعدد بواسطة الدرونز لمعايرة صور الأقمار الصناعية ومعالجة الإجهاد المائي على مستوى كل شجرة ونبتة.",
+        s11Title: "معاً نحو زراعة ذكية للأرض وما بعدها",
+        s11Desc: "نشكر لجنة تحكيم NASA Space Apps Cairo 2026. نحن مستعدون للإجابة عن استفساراتكم وبدء العرض التجريبي الحي.",
+        s11LiveBtn: "استعراض المنصة الحية ↗",
+        s11CropBtn: "محرك الدورة الزراعية ↗"
+      },
+      en: {
+        missionBadge: "LUNAR ANALOG &bull; NASA 2026",
+        tocBtn: "Contents",
+        fsBtn: "Fullscreen",
+        liveBtn: "Live System",
+        navHint: "Navigate",
+        fsHint: "Fullscreen",
+        langHint: "Language",
+        heroTrack: "NASA Challenge: Field Shift with Earth Observations",
+        heroDesc: "An IoT and AI smart agriculture and lunar analog mission control system — bridging ground telemetry with NASA satellite observations for resilient food and water security.",
+        heroTeam: "Team:",
+        heroNasaData: "NASA Data:",
+        heroHost: "Live Platform:",
+        s2Eyebrow: "The Problem & Challenge",
+        s2Title: "Resource Depletion: From Nile Valley to Deep Space",
+        s2Subtitle: "Conventional agriculture faces severe freshwater scarcity and soil exhaustion — the exact constraints that define closed-loop extraterrestrial habitat survival.",
+        s2C1Title: "Escalating Water Scarcity",
+        s2C1Text: "Egypt depends on the Nile for 97% of water needs amidst intensifying heatwaves, mandating at least a 30% cut in irrigation without sacrificing crop yields.",
+        s2C2Title: "Monoculture Soil Depletion",
+        s2C2Text: "The standard wheat/maize rotation drains up to -155 kg N/ha annually, driving synthetic fertilizer dependence and ground aquifer salinization.",
+        s2C3Title: "The Lunar Analog Constraint",
+        s2C3Text: "In lunar and Martian closed-loop greenhouses (Artemis Program), every milliliter of water and gram of nitrogen must be recycled with zero tolerance for waste.",
+        s3Eyebrow: "The Innovation",
+        s3Title: "SENSOURA: Tripartite Intelligence",
+        s3Subtitle: "A groundbreaking synthesis of real-time ground IoT sensors, NASA Earth observations, and machine learning decision-support algorithms.",
+        s3T1: "Ground Layer",
+        s3C1Title: "ESP32 Sensor Matrix",
+        s3C1Text: "7 in-situ telemetry streams capturing soil moisture/temp, ambient temp/humidity, VOC gas levels, illumination, and pressure with automated pump relay actuation.",
+        s3T2: "Space Layer",
+        s3C2Title: "NASA Earth Observations",
+        s3C2Text: "Direct integration with NASA POWER (radiation & GDD), SMAP (root-zone moisture), GPM (precipitation forecasting), and Landsat/MODIS (NDVI vigor).",
+        s3T3: "Decision Layer",
+        s3C3Title: "Crop Rotation & AI Engine",
+        s3C3Text: "Multi-objective decision matrix benchmarking 3 rotation strategies and predicting irrigation demand with human-in-the-loop safety verification.",
+        s4Eyebrow: "NASA Earth Observations",
+        s4Title: "Harnessing NASA Satellite Telemetry in the Field",
+        s4Subtitle: "Translating orbital sensor data into actionable farm interventions that conserve water and regenerate soil biology.",
+        s4C1Title: "Solar Irradiance & Climate",
+        s4C1Text: "Calculates Growing Degree Days (GDD) and surface thermal accumulation to pinpoint optimal phenological growth stages.",
+        s4C2Title: "Soil Moisture from Space",
+        s4C2Text: "Scans topsoil (0-5 cm) and root-zone moisture to calibrate capacitive ground probes and detect hydraulic stress before wilting.",
+        s4C3Title: "Global Precipitation (IMERG)",
+        s4C3Text: "Integrates radar and satellite rainfall forecasts to delay scheduled irrigations and prevent nitrogen-leaching waterlogging.",
+        s4C4Title: "Vegetation Health (NDVI)",
+        s4C4Text: "Tracks canopy chlorophyll absorption and green biomass to validate post-intervention recovery and crop vigor.",
+        s5Eyebrow: "Engineering & Hardware",
+        s5Title: "The In-Situ Ground Telemetry Node",
+        s5Subtitle: "Robust dual-core ESP32 edge device with cryptographically authenticated bidirectional WebSocket and HTTPS communication.",
+        s5HwSensorsTitle: "The 7 In-Situ Telemetry Channels:",
+        s5HwCtrlTitle: "Actuation & Operational Safeguards:",
+        s5HwCtrlDesc: "Optoisolated pump relay controlling drip/flood irrigation, emergency piezo acoustic alarm, and visual multi-status LED indicators.",
+        s6Eyebrow: "Field Shift Challenge Core",
+        s6Title: "The Crop Rotation AI Decision Engine",
+        s6Subtitle: "Rigorous agronomic modeling comparing 3 climate-adapted rotation pathways against regional soil and satellite telemetry.",
+        s6Strat1Tag: "Current Historical Standard",
+        s6Strat1Title: "1. Baseline Monoculture",
+        s6Strat1Desc: "(Winter Wheat ➔ Summer Yellow Maize): Standard Nile Delta rotation. Heavy water demand (1,100 mm/yr) and chronic nitrogen depletion.",
+        s6Strat2Tag: "Drought & Water Resilience",
+        s6Strat2Title: "2. Water-Saving Sequence",
+        s6Strat2Desc: "(Local Barley ➔ Grain Sorghum & Clover): Replaces water-thirsty staples with drought-hardy, heat-resilient cultivars.",
+        s6Strat3Tag: "⭐ Recommended Strategy",
+        s6Strat3Title: "3. Soil Regeneration & N-Fixing",
+        s6Strat3Desc: "(Faba Bean ➔ Sesame & Cover Crops): Exploits legume-rhizobia symbiosis to biologically inject atmospheric nitrogen into clay soils.",
+        s7Eyebrow: "Software Engineering",
+        s7Title: "Cloud-Native Resilient Architecture",
+        s7Subtitle: "Adhering to enterprise standards with sub-100ms real-time latency, zero unhandled render crashes, and end-to-end security.",
+        s8Eyebrow: "Live System in Production",
+        s8Title: "Real-Time Mission Control Dashboard",
+        s8Subtitle: "Live and deployed on public production infrastructure: sensoura.ox0x.com",
+        s8FeatTitle: "Operational Production Capabilities:",
+        s8F1: "Sub-second WebSocket telemetry streaming with zero page refreshes.",
+        s8F2: "Automatic heartbeat daemon ensuring continuous live telemetry availability.",
+        s8F3: "AI suggestions coupled with safe human-in-the-loop manual approval.",
+        s8F4: "Interactive crop rotation evaluator featuring localized GPS telemetry (Cairo, Egypt).",
+        s8LiveDesc: "Experience the live platform on any tablet, mobile, or desktop",
+        s8OpenBtn: "Launch Live Dashboard ↗",
+        s9Eyebrow: "Sustainable Impact",
+        s9Title: "Dual Impact: Nile Delta to Lunar Analog",
+        s9Subtitle: "Deployable today across Egyptian agriculture, laying the foundation for future extraterrestrial bio-regenerative life support.",
+        s9EarthTag: "Earth Ecosystem Impact",
+        s9EarthTitle: "Delta & Reclaimed Land Mega-Projects",
+        s9EarthText: "Conserving millions of cubic meters across New Delta, Toshka, and Sinai while mitigating synthetic fertilizer dependency (UN SDGs 2, 6, 12, 13).",
+        s9SpaceTag: "Space Mission Impact",
+        s9SpaceTitle: "Closed-Loop Extraterrestrial Greenhouses",
+        s9SpaceText: "Pioneering autonomous closed-loop bio-regenerative life support system (BLSS) algorithms for Artemis lunar habitats under stringent mass and water limits.",
+        s10Eyebrow: "Forward Roadmap",
+        s10Title: "Beyond the Hackathon",
+        s10Subtitle: "A tangible, phased strategy to transition our working production system into widespread commercial and research deployment.",
+        s10P1Title: "Full Working Platform (Completed)",
+        s10P1Text: "ESP32 sensors + NASA POWER/SMAP/GPM integration + AI rotation engine + live production server.",
+        s10P2Title: "LoRaWAN Mesh Expansion (Q1 2027)",
+        s10P2Text: "Interconnecting hundreds of soil nodes across 15+ km² rural farm clusters without local cellular dependencies.",
+        s10P3Title: "Multispectral Drone Fusion (Q2 2027)",
+        s10P3Text: "Calibrating satellite NDVI with ultra-high-resolution aerial drone imagery down to individual plant stress detection.",
+        s11Title: "Smart Agriculture for Earth and Beyond",
+        s11Desc: "Thank you to the NASA Space Apps Cairo 2026 jury. We are excited to answer questions and demonstrate the live platform.",
+        s11LiveBtn: "Explore Live Dashboard ↗",
+        s11CropBtn: "Crop Rotation Engine ↗"
+      }
+    };
+
+    let currentLang = 'ar';
+    let currentSlide = 1;
+    const slides = document.querySelectorAll('.slide');
+    const totalSlides = slides.length;
+
+    const progressBar = document.getElementById('progressBar');
+    const slideCounter = document.getElementById('slideCounter');
+    const btnPrev = document.getElementById('btnPrev');
+    const btnNext = document.getElementById('btnNext');
+    const btnLang = document.getElementById('btnLang');
+    const langLabel = document.getElementById('langLabel');
+    const btnFullscreen = document.getElementById('btnFullscreen');
+    const btnToc = document.getElementById('btnToc');
+    const tocModal = document.getElementById('tocModal');
+    const tocGrid = document.getElementById('tocGrid');
+
+    // Build Table of Contents
+    function buildToc() {
+      tocGrid.innerHTML = '';
+      slides.forEach((slide, idx) => {
+        const num = idx + 1;
+        const titleEl = slide.querySelector('.slide-title') || slide.querySelector('.hero-title');
+        const eyebrowEl = slide.querySelector('.slide-eyebrow') || slide.querySelector('.hero-badge');
+        const titleText = titleEl ? titleEl.innerText : `Slide ${num}`;
+        const eyebrowText = eyebrowEl ? eyebrowEl.innerText : `Section ${num}`;
+
+        const card = document.createElement('div');
+        card.className = `toc-card ${num === currentSlide ? 'active' : ''}`;
+        card.innerHTML = `<span>${String(num).padStart(2, '0')}</span><h4>${titleText}</h4><small style="color:#94a3b8; font-size: 0.75rem;">${eyebrowText}</small>`;
+        card.addEventListener('click', () => {
+          goToSlide(num);
+          closeToc();
+        });
+        tocGrid.appendChild(card);
+      });
+    }
+
+    function updateLanguage(lang) {
+      currentLang = lang;
+      document.documentElement.lang = lang;
+      document.body.dir = lang === 'ar' ? 'rtl' : 'ltr';
+      langLabel.innerText = lang === 'ar' ? 'English' : 'عربي';
+
+      // Update all elements with data-i18n
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (translations[lang] && translations[lang][key]) {
+          el.innerHTML = translations[lang][key];
+        }
+      });
+
+      // Update button directions and layout
+      btnPrev.innerHTML = lang === 'ar'
+        ? '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>'
+        : '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>';
+
+      btnNext.innerHTML = lang === 'ar'
+        ? '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>'
+        : '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>';
+
+      buildToc();
+    }
+
+    function goToSlide(n) {
+      if (n < 1) n = 1;
+      if (n > totalSlides) n = totalSlides;
+
+      slides.forEach((s, i) => {
+        s.classList.toggle('active', i + 1 === n);
+      });
+
+      currentSlide = n;
+      slideCounter.innerText = `${String(n).padStart(2, '0')} / ${String(totalSlides).padStart(2, '0')}`;
+      progressBar.style.width = `${((n) / totalSlides) * 100}%`;
+
+      btnPrev.disabled = n === 1;
+      btnNext.disabled = n === totalSlides;
+
+      buildToc();
+    }
+
+    function nextSlide() {
+      if (currentSlide < totalSlides) goToSlide(currentSlide + 1);
+    }
+
+    function prevSlide() {
+      if (currentSlide > 1) goToSlide(currentSlide - 1);
+    }
+
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else {
+        document.exitFullscreen().catch(() => {});
+      }
+    }
+
+    function openToc() {
+      buildToc();
+      tocModal.classList.add('open');
+    }
+
+    function closeToc() {
+      tocModal.classList.remove('open');
+    }
+
+    // Event Listeners
+    btnNext.addEventListener('click', nextSlide);
+    btnPrev.addEventListener('click', prevSlide);
+    btnFullscreen.addEventListener('click', toggleFullscreen);
+    btnLang.addEventListener('click', () => {
+      updateLanguage(currentLang === 'ar' ? 'en' : 'ar');
+    });
+
+    btnToc.addEventListener('click', () => {
+      if (tocModal.classList.contains('open')) closeToc();
+      else openToc();
+    });
+
+    tocModal.addEventListener('click', (e) => {
+      if (e.target === tocModal) closeToc();
+    });
+
+    // Keyboard Navigation
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+        e.preventDefault();
+        if (currentLang === 'ar') prevSlide();
+        else nextSlide();
+      } else if (e.key === 'ArrowLeft' || e.key === 'Backspace' || e.key === 'PageUp') {
+        e.preventDefault();
+        if (currentLang === 'ar') nextSlide();
+        else prevSlide();
+      } else if (e.key === 'Home') {
+        goToSlide(1);
+      } else if (e.key === 'End') {
+        goToSlide(totalSlides);
+      } else if (e.key.toLowerCase() === 'f') {
+        toggleFullscreen();
+      } else if (e.key.toLowerCase() === 't') {
+        if (tocModal.classList.contains('open')) closeToc();
+        else openToc();
+      } else if (e.key.toLowerCase() === 'l') {
+        updateLanguage(currentLang === 'ar' ? 'en' : 'ar');
+      } else if (e.key === 'Escape') {
+        closeToc();
+      }
+    });
+
+    // Touch Swipe Support
+    let touchStartX = 0;
+    let touchEndX = 0;
+    window.addEventListener('touchstart', e => {
+      touchStartX = e.changedTouches[0].screenX;
+    }, false);
+    window.addEventListener('touchend', e => {
+      touchEndX = e.changedTouches[0].screenX;
+      const diff = touchEndX - touchStartX;
+      if (Math.abs(diff) > 50) {
+        if (diff > 0) {
+          // Swipe Right
+          if (currentLang === 'ar') nextSlide();
+          else prevSlide();
+        } else {
+          // Swipe Left
+          if (currentLang === 'ar') prevSlide();
+          else nextSlide();
+        }
+      }
+    }, false);
+
+    // Initial setup
+    updateLanguage('ar');
+    goToSlide(1);
+  </script>
+</body>
+</html>

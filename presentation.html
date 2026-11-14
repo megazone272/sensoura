@@ -697,22 +697,98 @@
       }
     }
 
-    /* Responsive */
+    /* Responsive Design Across All Devices */
     @media (max-width: 900px) {
       .grid-2, .grid-3, .grid-4 {
         grid-template-columns: 1fr;
+        gap: 0.85rem;
       }
       .slide {
-        padding: 1.5rem;
+        padding: 1.25rem 0.85rem;
+        min-height: calc(100vh - 130px);
       }
       .slide-title {
-        font-size: 1.8rem;
+        font-size: clamp(1.4rem, 4.5vw, 1.9rem);
       }
       .hero-title {
-        font-size: 2.6rem;
+        font-size: clamp(2rem, 6.5vw, 3rem);
       }
       .kbd-hint {
+        display: none !important;
+      }
+    }
+
+    @media (max-width: 768px) {
+      header {
+        top: 0;
+        height: 54px;
+        padding: 0 0.85rem;
+      }
+      .brand {
+        gap: 0.5rem;
+      }
+      .brand-logo {
+        width: 28px;
+        height: 28px;
+      }
+      .brand-title {
+        font-size: 1rem;
+      }
+      .brand-badge {
+        display: none !important;
+      }
+      .nav-actions {
+        gap: 0.35rem;
+      }
+      .btn-icon {
+        padding: 0.35rem 0.55rem;
+        font-size: 0.76rem;
+      }
+      /* Hide text in secondary action buttons on mobile, keep language pill prominent */
+      #btnToc span, #btnFullscreen span, .nav-actions a span {
         display: none;
+      }
+      #btnFullscreen {
+        display: none;
+      }
+      footer {
+        height: 56px;
+        padding: 0 0.85rem;
+      }
+      .slide-counter {
+        font-size: 0.82rem;
+        padding: 3px 8px;
+      }
+      .btn-nav {
+        width: 36px;
+        height: 36px;
+        padding: 0;
+        display: grid;
+        place-items: center;
+      }
+      .modal-box {
+        width: 95vw;
+        max-height: 85vh;
+        padding: 1.25rem;
+      }
+      .toc-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 420px) {
+      .hero-badge {
+        font-size: 0.72rem;
+        padding: 4px 10px;
+      }
+      .hero-subtitle {
+        font-size: 0.88rem;
+      }
+      .stat-number {
+        font-size: 1.6rem;
+      }
+      .card {
+        padding: 1rem;
       }
     }
   </style>

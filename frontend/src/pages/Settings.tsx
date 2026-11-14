@@ -1,32 +1,23 @@
 import { useState } from 'react';
-import { BarChart3, Bell, Check, Globe2, LogOut, Mail, Moon, Palette, Sun, UserRound } from 'lucide-react';
+import { Bell, Check, Globe2, LogOut, Mail, Moon, Palette, Sun, UserRound } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '@contexts/ThemeContext';
 import { useLanguage } from '@contexts/LanguageContext';
 import { getAuthorizationRoleHint, isLocalDevelopmentEnvironment, signOut } from '@services/authToken';
 import { endpoints } from '@services/api';
-import { getAnalyticsConsent, isAnalyticsConfigured, setAnalyticsConsent, type AnalyticsConsent } from '@services/analytics';
 import { getAISuggestionAlertsEnabled, setAISuggestionAlertsEnabled } from '@services/notificationPreferences';
 
 export function Settings() {
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
   const { language, setLanguage, t } = useLanguage();
-  const [analyticsConsent, setAnalyticsConsentState] = useState<AnalyticsConsent>(getAnalyticsConsent());
   const [aiAlertsEnabled, setAiAlertsEnabled] = useState(getAISuggestionAlertsEnabled);
   const [signingOut, setSigningOut] = useState(false);
   const [testRecipient, setTestRecipient] = useState('');
   const [emailStatus, setEmailStatus] = useState<string | null>(null);
   const [emailBusy, setEmailBusy] = useState(false);
-  const analyticsConfigured = isAnalyticsConfigured();
   const localOperator = isLocalDevelopmentEnvironment();
   const isAdmin = getAuthorizationRoleHint() === 'admin';
-
-  const toggleAnalytics = () => {
-    const next: AnalyticsConsent = analyticsConsent === 'granted' ? 'denied' : 'granted';
-    setAnalyticsConsent(next);
-    setAnalyticsConsentState(next);
-  };
 
   const toggleAISuggestionAlerts = () => {
     const next = !aiAlertsEnabled;
@@ -99,15 +90,6 @@ export function Settings() {
         </div>
         {emailStatus && <p className="status-banner is-info mt-4" role="status">{emailStatus}</p>}
       </section>}
-
-      <section className="panel-card" data-motion-item>
-        <div className="section-heading compact"><div><p className="eyebrow">PRIVACY</p><h2>{t('analyticsTitle')}</h2></div><BarChart3 size={19} className="text-[var(--accent-primary)]" /></div>
-        <p className="microcopy mb-4">{t('analyticsDescription')}</p>
-        <div className="account-session-row">
-          <div><strong>{analyticsConsent === 'granted' ? t('analyticsOn') : analyticsConsent === 'denied' ? t('analyticsOff') : t('analyticsOff')}</strong><p className="microcopy">{analyticsConfigured ? '' : t('analyticsMissing')}</p></div>
-          <button className="btn btn-secondary" onClick={toggleAnalytics} disabled={!analyticsConfigured}>{analyticsConsent === 'granted' ? t('optOut') : t('optIn')}</button>
-        </div>
-      </section>
     </div>
   );
 }
