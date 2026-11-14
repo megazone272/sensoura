@@ -17,10 +17,12 @@ export default defineConfig({
     alias: {
       '@': path.resolve(configDir, './src'),
       '@components': path.resolve(configDir, './src/components'),
+      '@contexts': path.resolve(configDir, './src/contexts'),
       '@pages': path.resolve(configDir, './src/pages'),
       '@hooks': path.resolve(configDir, './src/hooks'),
       '@services': path.resolve(configDir, './src/services'),
       '@store': path.resolve(configDir, './src/store'),
+      '@shared': path.resolve(configDir, './src/shared'),
       '@styles': path.resolve(configDir, './src/styles'),
     },
   },

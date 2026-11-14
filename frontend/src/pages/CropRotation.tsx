@@ -46,7 +46,15 @@ interface Strategy {
 
 interface CropRotationResponse {
   strategies: Strategy[];
-  location: { name: string; lat: number; lon: number };
+  location?: {
+    name?: string;
+    city?: string;
+    country?: string;
+    lat?: number;
+    lon?: number;
+    latitude?: number;
+    longitude?: number;
+  };
   availableCrops: CropProfile[];
   evaluatedAt: number;
   source: string;
@@ -397,7 +405,11 @@ export function CropRotation() {
         }}>
           <span>{t('cropRotationSource')}: {data.source}</span>
           <span>{t('cropRotationEvaluatedAt')}: {new Date(data.evaluatedAt).toLocaleString(isAr ? 'ar-EG' : 'en-US')}</span>
-          <span>📍 {data.location.name} ({data.location.lat.toFixed(2)}°N, {data.location.lon.toFixed(2)}°E)</span>
+          <span>
+            📍 {data.location?.name ?? (data.location?.city ? `${data.location.city}, ${data.location.country ?? ''}` : 'Cairo, Egypt')} (
+            {Number(data.location?.lat ?? data.location?.latitude ?? 30.04).toFixed(2)}°N,{' '}
+            {Number(data.location?.lon ?? data.location?.longitude ?? 31.24).toFixed(2)}°E)
+          </span>
         </div>
       )}
     </div>

@@ -14,6 +14,22 @@ const farmContextSchema = z.object({
   currentCropId: z.string().trim().min(1).max(64).optional(),
 }).strict();
 
+function formatLocationPayload(loc: ReturnType<typeof realtimeService.getLocation>) {
+  const latitude = typeof loc?.latitude === 'number' ? loc.latitude : 30.044444;
+  const longitude = typeof loc?.longitude === 'number' ? loc.longitude : 31.235833;
+  const city = loc?.city || 'Cairo';
+  const country = loc?.country || 'Egypt';
+  return {
+    name: `${city}, ${country}`,
+    city,
+    country,
+    lat: latitude,
+    lon: longitude,
+    latitude,
+    longitude,
+  };
+}
+
 export async function registerCropRotationRoutes(fastify: FastifyInstance): Promise<void> {
 
   /**
@@ -42,7 +58,7 @@ export async function registerCropRotationRoutes(fastify: FastifyInstance): Prom
 
     return {
       strategies,
-      location: location ?? { name: 'Cairo, Egypt', lat: 30.044444, lon: 31.235833 },
+      location: formatLocationPayload(location),
       availableCrops: Object.values(CROPS_DATABASE).map(c => ({
         id: c.id,
         nameEn: c.nameEn,
@@ -97,7 +113,7 @@ export async function registerCropRotationRoutes(fastify: FastifyInstance): Prom
           primaryGoal: context.primaryGoal,
           currentCropId: context.currentCropId,
         },
-        location: location ?? { name: 'Cairo, Egypt', lat: 30.044444, lon: 31.235833 },
+        location: formatLocationPayload(location),
         evaluatedAt: Date.now(),
         source: 'SENSOURA AI + NASA Earth Observations',
       };
