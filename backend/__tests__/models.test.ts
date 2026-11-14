@@ -1,10 +1,12 @@
 import { describe, it, expect } from 'vitest';
+import { sensorDataSchema } from '../src/models/sensoura.js';
 import type {
   SensorData,
   SystemStatus,
   Command,
   CommandResult,
   AISuggestion,
+  AIPrediction,
   PredictionData,
 } from '../src/models/sensoura.js';
 
@@ -45,6 +47,24 @@ describe('Data Models', () => {
       };
 
       expect(validData).toBeDefined();
+    });
+
+    it('should accept Altitude when provided and validate via schema', () => {
+      const dataWithAltitude: SensorData = {
+        AirTemp: 28.4,
+        SoilTemp: 22.5,
+        AirHumidity: 65.0,
+        SoilMoisture: 24.0,
+        VOC: 185,
+        Light: 60,
+        Barometricpressure: 1013.25,
+        Altitude: 110.88,
+        lastUpdate: 1791864000000,
+      };
+
+      const parsed = sensorDataSchema.safeParse(dataWithAltitude);
+      expect(parsed.success).toBe(true);
+      expect(dataWithAltitude.Altitude).toBe(110.88);
     });
   });
 
@@ -118,6 +138,20 @@ describe('Data Models', () => {
       expect(['pending', 'approved', 'rejected', 'executed', 'expired']).toContain(suggestion.status);
       expect(suggestion.confidence).toBeGreaterThanOrEqual(0);
       expect(suggestion.confidence).toBeLessThanOrEqual(1);
+    });
+  });
+
+  describe('AIPrediction', () => {
+    it('should validate legacy/RTDB aiPredictions tree records', () => {
+      const prediction: AIPrediction = {
+        type: 'rainfall',
+        predictedValue: 'after 2 days afternoon',
+        confidence: 0.85,
+        predictionTime: 1791867600000,
+      };
+      expect(prediction.type).toBe('rainfall');
+      expect(prediction.confidence).toBe(0.85);
+      expect(prediction.predictedValue).toBe('after 2 days afternoon');
     });
   });
 

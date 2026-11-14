@@ -104,3 +104,4 @@ export async function registerCropRotationRoutes(fastify: FastifyInstance): Prom
     },
   );
 }
+
